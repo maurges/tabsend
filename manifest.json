@@ -1,0 +1,23 @@
+{ "manifest_version": 2
+, "name": "tabsend"
+, "version": "0.0"
+
+, "description": "Sends tabs yo"
+, "icons":
+    { "48": "icons/48.png"
+    }
+
+, "browser_action":
+    { "default_icon": "icons/48.png"
+    , "default_title": "tabsend default title"
+    }
+, "background":
+    { "scripts": ["src/background.js"]
+    }
+, "permissions":
+    [ "alarms"
+    , "tabs"
+    , "http://localhost:31337/*"
+    , "http://localhost/*"
+    ]
+}
