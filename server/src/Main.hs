@@ -135,7 +135,7 @@ pushTab _token req = do
 
 grabTab :: Maybe AuthToken -> GrabTabReq -> Handler Text
 grabTab _token req = do
-    liftIO . putStrLn $ "pushTab | " <> show req
+    liftIO . putStrLn $ "grabTab | " <> show req
     pure "ok"
 
 notifyTabs :: Maybe AuthToken -> NotifyTabsReq -> Handler Text

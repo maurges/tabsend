@@ -52,10 +52,27 @@ function expect(x, s) {
 
 /**
  * @param {string} baseUrl
+ * @param {TokenReq} req
+ * @returns {Promise<string>}
+ */
+async function getTokenR(baseUrl, req) {
+    const url = baseUrl + "/token";
+    const r = await fetch(url, {
+        method: "POST",
+        body: JSON.stringify(req),
+        headers: {
+            "Content-Type": "application/json",
+        },
+    });
+    return r.text();
+}
+
+/**
+ * @param {string} baseUrl
  * @param {string} authToken
  * @returns {Promise<PeersResp>}
  */
-async function getPeers(baseUrl, authToken) {
+async function getPeersR(baseUrl, authToken) {
     const url = baseUrl + "/get-peers";
     const r = await fetch(url, {
         method: "GET",
@@ -73,7 +90,7 @@ async function getPeers(baseUrl, authToken) {
  * @param {PushTabReq} req
  * @returns {Promise<string>}
  */
-async function pushTab(baseUrl, authToken, req) {
+async function pushTabR(baseUrl, authToken, req) {
     const url = baseUrl + "/push-tab";
     const r = await fetch(url, {
         method: "POST",
@@ -92,7 +109,7 @@ async function pushTab(baseUrl, authToken, req) {
  * @param {GrabTabReq} req
  * @returns {Promise<string>}
  */
-async function grabTab(baseUrl, authToken, req) {
+async function grabTabR(baseUrl, authToken, req) {
     const url = baseUrl + "/grab-tab";
     const r = await fetch(url, {
         method: "POST",
@@ -118,21 +135,56 @@ async function grabTab(baseUrl, authToken, req) {
 function byId(id) {
     return expect(document.getElementById(id), "malformed page");
 }
+
 /**
- * @param tab {browser.tabs.Tab}
+ * @param {string} baseUrl
+ * @param {string} token
+ * @param {TabInfo} tab
+ * @param {string} targetPeer
+ */
+async function grabTab(baseUrl, token, tab, targetPeer) {
+    await browser.tabs.create({
+        active: true,
+        url: tab.url,
+    });
+    grabTabR(baseUrl, token, {target: targetPeer, tabIdentity: tab.identity});
+}
+
+/**
+ * @param {string} baseUrl
+ * @param {string} token
+ * @param {TabInfo} tab - parsed tab to remove undefineds
+ * @param {string} targetPeer
+ */
+async function pushTab(baseUrl, token, tab, targetPeer) {
+    await pushTabR(baseUrl, token, { target: targetPeer, tab });
+    const tabId = parseInt(tab.identity) || [];
+    browser.tabs.remove(tabId);
+}
+
+/**
+ * @param {string} baseUrl
+ * @param {string} token
+ * @param {browser.tabs.Tab} tab
  * @returns {HTMLElement}
  */
-function makeTabEntry(tab) {
+function makeTabEntry(baseUrl, token, tab) {
+    const tabTitle = expect(tab.title, "not enough tab permissions to get tab title");
+    const tabUrl = expect(tab.url, "not enough tab permissions to get tab url");
+    const tabId = expect(tab.id, "not enough tab permissions to get tab id").toString();
+
     const span = document.createElement("span");
-    span.innerText = expect(tab.title, "not enough tab permissions to get tab title");
+    span.innerText = tabTitle;
     const button = document.createElement("button");
     button.innerText = "send"
     span.appendChild(button);
     button.onclick = () => {
-        fetch("http://localhost:31337/send", {
-            method: "POST",
-            body: JSON.stringify({url: tab.url}),
-        })
+        const tabToSend = {
+            url: tabUrl,
+            identity: tabId,
+            title: tabTitle,
+        };
+        pushTab(baseUrl, token, tabToSend, "todo");
     };
     return span;
 }
@@ -142,7 +194,7 @@ async function run() {
     const allTabsDiv = byId("all-tabs");
 
     const baseUrl = "http://localhost:31337";
-    const token = await getToken(baseUrl, "username", "password");
+    const token = await getTokenR(baseUrl, { username: "username", password: "password" });
 
     // draw windows from this device
 
@@ -155,7 +207,7 @@ async function run() {
 
         const winTabs = expect(w.tabs, "not enough tab permissions to get window tabs");
         for (const tab of winTabs) {
-            const tabElem = makeTabEntry(tab);
+            const tabElem = makeTabEntry(baseUrl, token, tab);
             const li = document.createElement("li");
             li.appendChild(tabElem);
             ul.appendChild(li);
@@ -166,7 +218,7 @@ async function run() {
 
     // draw windows from other peers too
 
-    const peers = await getPeers(baseUrl, token);
+    const peers = await getPeersR(baseUrl, token);
     for (const peer of peers.peers) {
         const peerDiv = document.createElement("div");
         peerDiv.innerText = peer.name;
@@ -180,10 +232,19 @@ async function run() {
             const ul = document.createElement("ul");
             windowElem.appendChild(ul)
             for (const tab of w.tabs) {
+                const li = document.createElement("li");
+
                 const tabElem = document.createElement("span");
                 tabElem.innerText = tab.title;
-                const li = document.createElement("li");
+
+                const grabButton = document.createElement("button");
+                grabButton.innerText = "grab";
+                grabButton.onclick = () => {
+                    grabTab(baseUrl, token, tab, peer.name);
+                };
+
                 li.appendChild(tabElem);
+                li.appendChild(grabButton);
                 ul.appendChild(li);
             }
         }
