@@ -12,7 +12,7 @@
     , "default_title": "tabsend default title"
     }
 , "background":
-    { "scripts": ["src/background.js"]
+    { "scripts": ["background/main.js"]
     }
 , "permissions":
     [ "alarms"

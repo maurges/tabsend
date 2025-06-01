@@ -69,7 +69,12 @@ data GrabTabReq = GrabTabReq
 
 data NotifyTabsReq = NotifyTabsReq
     { windows :: ![WindowInfo]
-        -- ^ Will be empty if nochange is true
+    }
+    deriving (Eq, Show, Generic)
+    deriving anyclass (FromJSON, ToJSON)
+data NotifyTabsResp = NotifyTabsResp
+    { tabs :: ![TabInfo]
+        -- ^ Tabs that other peers pushed to you
     }
     deriving (Eq, Show, Generic)
     deriving anyclass (FromJSON, ToJSON)
@@ -89,7 +94,7 @@ type PushTabApi = "push-tab" :> Authd :> SApi.ReqBody '[SApi.JSON] PushTabReq :>
 -- | Grab a tab from a peer
 type GrabTabApi = "grab-tab" :> Authd :> SApi.ReqBody '[SApi.JSON] GrabTabReq :> SApi.Post '[SApi.PlainText] Text
 -- | Notify of our tab state
-type NotifyTabsApi = "update" :> Authd :> SApi.ReqBody '[SApi.JSON] NotifyTabsReq :> SApi.Post '[SApi.PlainText] Text
+type NotifyTabsApi = "update" :> Authd :> SApi.ReqBody '[SApi.JSON] NotifyTabsReq :> SApi.Post '[SApi.JSON] NotifyTabsResp
 
 type Api = TokenApi :<|> GetPeersApi :<|> PushTabApi :<|> GrabTabApi :<|> NotifyTabsApi
 api :: Proxy Api
@@ -138,10 +143,10 @@ grabTab _token req = do
     liftIO . putStrLn $ "grabTab | " <> show req
     pure "ok"
 
-notifyTabs :: Maybe AuthToken -> NotifyTabsReq -> Handler Text
+notifyTabs :: Maybe AuthToken -> NotifyTabsReq -> Handler NotifyTabsResp
 notifyTabs _token req = do
     liftIO . putStrLn $ "notify | " <> show req
-    pure "ok"
+    pure NotifyTabsResp { tabs = [] }
 
 apiServer :: SServer.Server Api
 apiServer = getToken :<|> getPeers :<|> pushTab :<|> grabTab :<|> notifyTabs

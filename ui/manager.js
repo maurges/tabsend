@@ -31,6 +31,14 @@ function expect(x, s) {
     return x;
 }
 
+/**
+ * @param {string} id
+ * @returns {HTMLElement}
+ */
+function byId(id) {
+    return expect(document.getElementById(id), "malformed page");
+}
+
 
 /******************************/
 /****** Type definitions ******/
@@ -123,18 +131,99 @@ async function grabTabR(baseUrl, authToken, req) {
 }
 
 
+/*****************************/
+/****** Dropdown design ******/
+/*****************************/
+
+
+let sendDropdown = byId("send-dropdown");
+/** @type {TabInfo | null} */
+let dropdownTabTarget = null;
+
+document.addEventListener("click", () => {
+    // hide the dropdown on any click inside the document
+    sendDropdown.style.display = "none";
+});
+document.addEventListener('keydown', e => {
+    // hide the dropdown on escape
+    if (e.key === 'Escape') {
+        sendDropdown.style.display = "none";
+    }
+});
+window.addEventListener("scroll", () => {
+    // hide the dropdown on scroll
+    sendDropdown.style.display = "none";
+})
+
+/**
+ * @param {Event} e
+ * @param {TabInfo} tab
+ */
+function showDropdown(e, tab) {
+    e.stopPropagation();
+
+    dropdownTabTarget = tab;
+
+    // Position dropdown relative to the clicked button
+    const source = expect(e.target, "Caught unexpected event");
+    if (!(source instanceof HTMLElement)) {
+        panic("Unexpected event target");
+    }
+    const rect = source.getBoundingClientRect();
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
+
+    // position it below the source
+    let top = rect.bottom + scrollTop;
+    let left = rect.left + scrollLeft;
+
+    // If it would go off-screen downwards, position above instead
+    const dropdownHeight = 200; // Approximate height WTF is this? Gpt what did you give
+    if (rect.bottom + dropdownHeight > window.innerHeight) {
+        // Position above the button instead
+        top = rect.top + scrollTop - dropdownHeight;
+    }
+
+    sendDropdown.style.top = top + "px";
+    sendDropdown.style.left = left + "px";
+    sendDropdown.style.display = "block";
+}
+
+/**
+ * @param {string} baseUrl
+ * @param {string} token
+ * @param {string[]} names
+ */
+function populateDropdown(baseUrl, token, names) {
+    // remove all children
+    sendDropdown.innerHTML = "";
+
+    for (const name of names) {
+        const div = document.createElement("div");
+        div.innerText = name;
+        div.style.padding = "8px 12px";
+        div.style.cursor = "pointer";
+        /** @ts-ignore */
+        div.style["border-bottom"] = "1px solid #eee";
+
+        div.onclick = () => {
+            const tabToSend = expect(dropdownTabTarget, "invalid event flow");
+            pushTab(baseUrl, token, tabToSend, name);
+        };
+
+        sendDropdown.appendChild(div);
+    }
+    if (sendDropdown.lastChild) {
+        /** @ts-ignore */
+        sendDropdown.lastChild.style["border-bottom"] = undefined;
+    }
+}
+
+
 /****************************/
 /****** Main extension ******/
 /****************************/
 
-
-/**
- * @param {string} id
- * @returns {HTMLElement}
- */
-function byId(id) {
-    return expect(document.getElementById(id), "malformed page");
-}
 
 /**
  * @param {string} baseUrl
@@ -178,13 +267,13 @@ function makeTabEntry(baseUrl, token, tab) {
     const button = document.createElement("button");
     button.innerText = "send"
     span.appendChild(button);
-    button.onclick = () => {
+    button.onclick = e => {
         const tabToSend = {
             url: tabUrl,
             identity: tabId,
             title: tabTitle,
         };
-        pushTab(baseUrl, token, tabToSend, "todo");
+        showDropdown(e, tabToSend);
     };
     return span;
 }
@@ -219,6 +308,9 @@ async function run() {
     // draw windows from other peers too
 
     const peers = await getPeersR(baseUrl, token);
+    const peerNames = peers.peers.map(p => p.name);
+    populateDropdown(baseUrl, token, peerNames);
+
     for (const peer of peers.peers) {
         const peerDiv = document.createElement("div");
         peerDiv.innerText = peer.name;

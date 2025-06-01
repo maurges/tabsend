@@ -38,6 +38,8 @@ function expect(x, s) {
 /** @typedef {{title: string, tabs: TabInfo[]}} WindowInfo */
 /** @typedef {{name: string, windows: WindowInfo[]}} PeerInfo */
 /** @typedef {{windows: WindowInfo[]}} NotifyTabReq */
+/** @typedef {{tabs: TabInfo[]}} NotifyTabResp */
+
 
 /*********************************/
 /****** Request definitions ******/
@@ -66,7 +68,7 @@ async function getToken(baseUrl, username, password) {
  * @param {string} baseUrl
  * @param {string} authToken
  * @param {NotifyTabReq} req
- * @returns {Promise<string>}
+ * @returns {Promise<NotifyTabResp>}
  */
 async function updateTabs(baseUrl, authToken, req) {
     const url = baseUrl + "/update";
@@ -78,7 +80,7 @@ async function updateTabs(baseUrl, authToken, req) {
             "X-Tabsend-Auth": authToken,
         },
     });
-    return r.text();
+    return r.json(); // TODO proper parsing
 }
 
 
@@ -138,5 +140,13 @@ browser.alarms.onAlarm.addListener(async (a) => {
 
     const req = { windows };
     const resp = await updateTabs(baseUrl, token, req);
+
+    // create new received tabs
+    for (const tab of resp.tabs) {
+        await browser.tabs.create({
+            active: false,
+            url: tab.url,
+        });
+    }
 });
-browser.alarms.create("tab-notify", {delayInMinutes: 1});
+browser.alarms.create("tab-notify", {periodInMinutes: 0.25});
