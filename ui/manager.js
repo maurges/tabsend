@@ -47,7 +47,7 @@ function byId(id) {
 
 /** @typedef {{username: string, password: string}} TokenReq */
 /** @typedef {{url: string, identity: string, title: string}} TabInfo */
-/** @typedef {{title: string, tabs: TabInfo[]}} WindowInfo */
+/** @typedef {{title: string, identity: number, tabs: TabInfo[]}} WindowInfo */
 /** @typedef {{name: string, windows: WindowInfo[]}} PeerInfo */
 /** @typedef {{peers: PeerInfo[]}} PeersResp */
 /** @typedef {{target: string, tab: TabInfo}} PushTabReq */

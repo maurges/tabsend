@@ -1,6 +1,6 @@
 name:                tabsend-server
 version:             0.1.0.0
-license:             GPL3
+license:             AGPL-3
 author:              "morj"
 maintainer:          "contact@morj.com"
 synopsis:            Does stuff
@@ -39,3 +39,6 @@ default-extensions:
 - ScopedTypeVariables
 - TypeApplications
 - TypeOperators
+
+- NoFieldSelectors
+- OverloadedRecordDot

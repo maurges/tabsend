@@ -37,6 +37,7 @@ data TabInfo = TabInfo
     deriving anyclass (FromJSON, ToJSON)
 data WindowInfo = WindowInfo
     { title :: !Text
+    , identity :: !Int -- ^ For disambiguation in pushing
     , tabs :: ![TabInfo]
     }
     deriving (Eq, Show, Generic)
@@ -52,9 +53,16 @@ data PeersResp = PeersResp
     }
     deriving (Eq, Show, Generic)
     deriving anyclass (FromJSON, ToJSON)
+data PushedTab = PushedTab
+    { url :: !Text
+    , windowId :: !Text
+    }
+    deriving (Eq, Show, Generic)
+    deriving anyclass (FromJSON, ToJSON)
 
 data PushTabReq = PushTabReq
     { target :: !Text -- ^ Peer name
+    , windowId :: !Int
     , tab :: !TabInfo
     }
     deriving (Eq, Show, Generic)
@@ -62,7 +70,7 @@ data PushTabReq = PushTabReq
 
 data GrabTabReq = GrabTabReq
     { target :: !Text -- ^ Peer name
-    , tabIdentity :: !Text
+    , tabId :: !Text
     }
     deriving (Eq, Show, Generic)
     deriving anyclass (FromJSON, ToJSON)
@@ -73,7 +81,7 @@ data NotifyTabsReq = NotifyTabsReq
     deriving (Eq, Show, Generic)
     deriving anyclass (FromJSON, ToJSON)
 data NotifyTabsResp = NotifyTabsResp
-    { tabs :: ![TabInfo]
+    { tabs :: ![PushedTab]
         -- ^ Tabs that other peers pushed to you
     }
     deriving (Eq, Show, Generic)
@@ -115,6 +123,7 @@ getPeers _token = do
                 , windows =
                     [ WindowInfo
                         { title = "Window 1"
+                        , identity = 0
                         , tabs =
                             [ TabInfo
                                 { url = "https://kagi.com"
