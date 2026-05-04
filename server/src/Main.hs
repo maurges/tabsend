@@ -119,23 +119,24 @@ getPeers _token = do
     pure PeersResp
         { peers =
             [ PeerInfo
-                { name = "lover"
+                { name = "The notebook"
                 , windows =
                     [ WindowInfo
                         { title = "Window 1"
                         , identity = 0
-                        , tabs =
-                            [ TabInfo
-                                { url = "https://kagi.com"
-                                , title = "kagi"
-                                , identity = "1"
-                                }
-                            , TabInfo
-                                { url = "https://blog.morj.men"
-                                , title = "morjlog"
-                                , identity = "2"
-                                }
-                            ]
+                        , tabs = map (\title -> TabInfo { url = "https://morj.men", title, identity = ""})
+                            ["Search", "Blog", "Tab3", "Tab4", "A very long name that cuts off and looks ugly"]
+                        }
+                    ]
+                }
+            , PeerInfo
+                { name = "The Phone"
+                , windows =
+                    [ WindowInfo
+                        { title = "Window 1"
+                        , identity = 0
+                        , tabs = map (\title -> TabInfo { url = "https://morj.men", title, identity = ""})
+                            ["Not Search", "Not Blog", "Not Tab3", "Not Tab4", "Not A very long name that cuts off and looks ugly"]
                         }
                     ]
                 }
