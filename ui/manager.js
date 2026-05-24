@@ -36,7 +36,7 @@ function expect(x, s) {
  * @returns {HTMLElement}
  */
 function byId(id) {
-    return expect(document.getElementById(id), "malformed page");
+    return expect(document.getElementById(id), `malformed page: ${id} not found`);
 }
 
 
@@ -263,6 +263,7 @@ function makeTabEntry(baseUrl, token, tab) {
     const tabId = expect(tab.id, "not enough tab permissions to get tab id").toString();
 
     const span = document.createElement("span");
+    span.classList.add("tab");
     span.innerText = tabTitle;
     const button = document.createElement("button");
     button.innerText = "send"
@@ -279,7 +280,8 @@ function makeTabEntry(baseUrl, token, tab) {
 }
 
 async function run() {
-    const thisDeviceUl = byId("this-device");
+    const thisDeviceElem = byId("this-device");
+    const otherDevicesElem = byId("other-devices");
     const allTabsDiv = byId("all-tabs");
 
     const baseUrl = "http://localhost:31337";
@@ -289,20 +291,16 @@ async function run() {
 
     const windows = await browser.windows.getAll({populate: true});
     for (const w of windows) {
-        const windowElem = document.createElement("li");
+        const windowElem = document.createElement("div");
         windowElem.innerText = expect(w.title, "not enough tab permissions to get tab title");
-        const ul = document.createElement("ul");
-        windowElem.appendChild(ul)
+        windowElem.classList.add("tab");
+        thisDeviceElem.appendChild(windowElem);
 
         const winTabs = expect(w.tabs, "not enough tab permissions to get window tabs");
         for (const tab of winTabs) {
             const tabElem = makeTabEntry(baseUrl, token, tab);
-            const li = document.createElement("li");
-            li.appendChild(tabElem);
-            ul.appendChild(li);
+            thisDeviceElem.appendChild(tabElem);
         }
-
-        thisDeviceUl.appendChild(windowElem);
     }
 
     // draw windows from other peers too
@@ -313,20 +311,16 @@ async function run() {
 
     for (const peer of peers.peers) {
         const peerDiv = document.createElement("div");
+        peerDiv.classList.add("tab");
         peerDiv.innerText = peer.name;
-        const peerUl = document.createElement("ul");
-        peerDiv.appendChild(peerUl);
+        otherDevicesElem.appendChild(peerDiv);
 
         for (const w of peer.windows) {
-            const windowElem = document.createElement("li");
-            peerUl.appendChild(windowElem);
+            const windowElem = document.createElement("div");
+            windowElem.classList.add("tab");
             windowElem.innerText = w.title;
-            const ul = document.createElement("ul");
-            windowElem.appendChild(ul)
             for (const tab of w.tabs) {
-                const li = document.createElement("li");
-
-                const tabElem = document.createElement("span");
+                const tabElem = document.createElement("div");
                 tabElem.innerText = tab.title;
 
                 const grabButton = document.createElement("button");
@@ -335,13 +329,81 @@ async function run() {
                     grabTab(baseUrl, token, tab, peer.name);
                 };
 
-                li.appendChild(tabElem);
-                li.appendChild(grabButton);
-                ul.appendChild(li);
+                tabElem.appendChild(grabButton);
+                otherDevicesElem.appendChild(tabElem);
             }
         }
-        allTabsDiv.appendChild(peerDiv);
     }
 }
 
-run();
+// run();
+
+let localModel = {tabs: []};
+let remoteModel = {devices: []};
+document.addEventListener("alpine:init", () => {
+    localModel = Alpine.reactive(localModel);
+    remoteModel = Alpine.reactive(remoteModel);
+    // Note: it annoys me that the docs are not docs. What exactly can I return in the callback in data?
+    Alpine.data("localModel", () => localModel);
+    Alpine.data("remoteModel", () => remoteModel);
+
+    Alpine.data("glob", () => ({
+        grabTab: grabTab,
+        showDropdown: showDropdown,
+    }));
+});
+
+// Note: why is Alpine.reactive and .effect not listed in globals??
+async function runAlpine() {
+    const baseUrl = "http://localhost:31337";
+    const token = await getTokenR(baseUrl, { username: "username", password: "password" });
+
+    // Populate the model for local tabs
+    const windows = await browser.windows.getAll({populate: true});
+    for (const w of windows) {
+        const winTabs = expect(w.tabs, "not enough tab permissions to get window tabs");
+        for (const tab of winTabs) {
+            const tabTitle = expect(tab.title, "not enough tab permissions to get tab title");
+            const tabUrl = expect(tab.url, "not enough tab permissions to get tab url");
+            const tabId = expect(tab.id, "not enough tab permissions to get tab id").toString();
+            const tabModel = {
+                id: tabId,
+                title: tabTitle,
+                url: tabUrl,
+            };
+            localModel.tabs.push(tabModel);
+        }
+    }
+
+    // Populate the model for remote tabs, gotten from the server
+    const peers = await getPeersR(baseUrl, token);
+    const peerNames = peers.peers.map(p => p.name);
+    populateDropdown(baseUrl, token, peerNames);
+
+    for (const peer of peers.peers) {
+        let peerModel = {
+            name: peer.name,
+            tabs: [],
+        };
+        for (const w of peer.windows) {
+            for (const tab of w.tabs) {
+                const tabModel = {
+                    id: tab.identity,
+                    title: tab.title,
+                    url: tab.url,
+                };
+                peerModel.tabs.push(tab);
+            }
+        }
+        remoteModel.devices.push(peerModel);
+    }
+
+    // Note: apparently there is a separate CSP build, that I have to run in
+    // firefox extensions. Apparently it's not 100% compatible with normal
+    // alpine
+    // Note: this doesn't fucking work, I get errors that the property is not
+    // found. Fucking garbage docs
+    console.log("====== govno ======", remoteModel);
+}
+
+runAlpine();
