@@ -31,12 +31,9 @@ function expect(x, s) {
     return x;
 }
 
-/**
- * @param {string} id
- * @returns {HTMLElement}
- */
-function byId(id) {
-    return expect(document.getElementById(id), `malformed page: ${id} not found`);
+
+async function sleep(time) {
+    return new Promise(accept => setTimeout(accept, time));
 }
 
 
@@ -46,9 +43,8 @@ function byId(id) {
 
 
 /** @typedef {{username: string, password: string}} TokenReq */
-/** @typedef {{url: string, identity: string, title: string}} TabInfo */
-/** @typedef {{title: string, identity: number, tabs: TabInfo[]}} WindowInfo */
-/** @typedef {{name: string, windows: WindowInfo[]}} PeerInfo */
+/** @typedef {{url: string, identity: string, title: string, favicon: string | null}} TabInfo */
+/** @typedef {{name: string, windows: TabInfo[]}} PeerInfo */
 /** @typedef {{peers: PeerInfo[]}} PeersResp */
 /** @typedef {{target: string, tab: TabInfo}} PushTabReq */
 /** @typedef {{target: string, tabIdentity: string}} GrabTabReq */
@@ -131,279 +127,116 @@ async function grabTabR(baseUrl, authToken, req) {
 }
 
 
-/*****************************/
-/****** Dropdown design ******/
-/*****************************/
+/***********************/
+/****** UI models ******/
+/***********************/
 
 
-let sendDropdown = byId("send-dropdown");
-/** @type {TabInfo | null} */
-let dropdownTabTarget = null;
-
-document.addEventListener("click", () => {
-    // hide the dropdown on any click inside the document
-    sendDropdown.style.display = "none";
-});
-document.addEventListener('keydown', e => {
-    // hide the dropdown on escape
-    if (e.key === 'Escape') {
-        sendDropdown.style.display = "none";
-    }
-});
-window.addEventListener("scroll", () => {
-    // hide the dropdown on scroll
-    sendDropdown.style.display = "none";
-})
-
-/**
- * @param {Event} e
- * @param {TabInfo} tab
- */
-function showDropdown(e, tab) {
-    e.stopPropagation();
-
-    dropdownTabTarget = tab;
-
-    // Position dropdown relative to the clicked button
-    const source = expect(e.target, "Caught unexpected event");
-    if (!(source instanceof HTMLElement)) {
-        panic("Unexpected event target");
-    }
-    const rect = source.getBoundingClientRect();
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-    const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
-
-    // position it below the source
-    let top = rect.bottom + scrollTop;
-    let left = rect.left + scrollLeft;
-
-    // If it would go off-screen downwards, position above instead
-    const dropdownHeight = 200; // Approximate height WTF is this? Gpt what did you give
-    if (rect.bottom + dropdownHeight > window.innerHeight) {
-        // Position above the button instead
-        top = rect.top + scrollTop - dropdownHeight;
-    }
-
-    sendDropdown.style.top = top + "px";
-    sendDropdown.style.left = left + "px";
-    sendDropdown.style.display = "block";
-}
-
-/**
- * @param {string} baseUrl
- * @param {string} token
- * @param {string[]} names
- */
-function populateDropdown(baseUrl, token, names) {
-    // remove all children
-    sendDropdown.innerHTML = "";
-
-    for (const name of names) {
-        const div = document.createElement("div");
-        div.innerText = name;
-        div.style.padding = "8px 12px";
-        div.style.cursor = "pointer";
-        /** @ts-ignore */
-        div.style["border-bottom"] = "1px solid #eee";
-
-        div.onclick = () => {
-            const tabToSend = expect(dropdownTabTarget, "invalid event flow");
-            pushTab(baseUrl, token, tabToSend, name);
-        };
-
-        sendDropdown.appendChild(div);
-    }
-    if (sendDropdown.lastChild) {
-        /** @ts-ignore */
-        sendDropdown.lastChild.style["border-bottom"] = undefined;
-    }
-}
-
-
-/****************************/
-/****** Main extension ******/
-/****************************/
+/** @typedef {{ title: string, favicon: string|null, url: string }} TabData */
 
 
 /**
- * @param {string} baseUrl
- * @param {string} token
- * @param {TabInfo} tab
- * @param {string} targetPeer
+ * @param {DragEvent} e
+ * @param {TabData} tab
+ * @param {string} deviceName
  */
-async function grabTab(baseUrl, token, tab, targetPeer) {
-    await browser.tabs.create({
-        active: true,
-        url: tab.url,
-    });
-    grabTabR(baseUrl, token, {target: targetPeer, tabIdentity: tab.identity});
-}
-
-/**
- * @param {string} baseUrl
- * @param {string} token
- * @param {TabInfo} tab - parsed tab to remove undefineds
- * @param {string} targetPeer
- */
-async function pushTab(baseUrl, token, tab, targetPeer) {
-    await pushTabR(baseUrl, token, { target: targetPeer, tab });
-    const tabId = parseInt(tab.identity) || [];
-    browser.tabs.remove(tabId);
-}
-
-/**
- * @param {string} baseUrl
- * @param {string} token
- * @param {browser.tabs.Tab} tab
- * @returns {HTMLElement}
- */
-function makeTabEntry(baseUrl, token, tab) {
-    const tabTitle = expect(tab.title, "not enough tab permissions to get tab title");
-    const tabUrl = expect(tab.url, "not enough tab permissions to get tab url");
-    const tabId = expect(tab.id, "not enough tab permissions to get tab id").toString();
-
-    const span = document.createElement("span");
-    span.classList.add("tab");
-    span.innerText = tabTitle;
-    const button = document.createElement("button");
-    button.innerText = "send"
-    span.appendChild(button);
-    button.onclick = e => {
-        const tabToSend = {
-            url: tabUrl,
-            identity: tabId,
-            title: tabTitle,
-        };
-        showDropdown(e, tabToSend);
-    };
-    return span;
-}
-
-async function run() {
-    const thisDeviceElem = byId("this-device");
-    const otherDevicesElem = byId("other-devices");
-    const allTabsDiv = byId("all-tabs");
-
-    const baseUrl = "http://localhost:31337";
-    const token = await getTokenR(baseUrl, { username: "username", password: "password" });
-
-    // draw windows from this device
-
-    const windows = await browser.windows.getAll({populate: true});
-    for (const w of windows) {
-        const windowElem = document.createElement("div");
-        windowElem.innerText = expect(w.title, "not enough tab permissions to get tab title");
-        windowElem.classList.add("tab");
-        thisDeviceElem.appendChild(windowElem);
-
-        const winTabs = expect(w.tabs, "not enough tab permissions to get window tabs");
-        for (const tab of winTabs) {
-            const tabElem = makeTabEntry(baseUrl, token, tab);
-            thisDeviceElem.appendChild(tabElem);
-        }
+function onDragStart(e, tab, deviceName) {
+    dragModel.sourcePane = deviceName;
+    dragModel.tabData = tab;
+    if (e.dataTransfer === null) {
+        panic("Data transfer is null");
     }
-
-    // draw windows from other peers too
-
-    const peers = await getPeersR(baseUrl, token);
-    const peerNames = peers.peers.map(p => p.name);
-    populateDropdown(baseUrl, token, peerNames);
-
-    for (const peer of peers.peers) {
-        const peerDiv = document.createElement("div");
-        peerDiv.classList.add("tab");
-        peerDiv.innerText = peer.name;
-        otherDevicesElem.appendChild(peerDiv);
-
-        for (const w of peer.windows) {
-            const windowElem = document.createElement("div");
-            windowElem.classList.add("tab");
-            windowElem.innerText = w.title;
-            for (const tab of w.tabs) {
-                const tabElem = document.createElement("div");
-                tabElem.innerText = tab.title;
-
-                const grabButton = document.createElement("button");
-                grabButton.innerText = "grab";
-                grabButton.onclick = () => {
-                    grabTab(baseUrl, token, tab, peer.name);
-                };
-
-                tabElem.appendChild(grabButton);
-                otherDevicesElem.appendChild(tabElem);
-            }
-        }
-    }
+    e.dataTransfer.dropEffect = "move";
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", tab.title)
 }
 
-// run();
 
-let localModel = {tabs: []};
-let remoteModel = {devices: []};
+/** @type {{ tabs: TabData[] }} */
+let localTabModel = { tabs: [] };
+/** @type {{ devices: { name: string, tabs: TabData[] }[] }} */
+let remoteDeviceModel = { devices: [] };
+/** @type {{ hoverPanes: {[name: string]: boolean}, sourcePane: string | null, tabData: TabData | null }} */
+let dragModel = { hoverPanes: {}, sourcePane: null, tabData: null };
+
+async function populateTabs() {
+    const tabs = await browser.tabs.query({});
+    let tabModel = [];
+    for (const tab of tabs) {
+        tabModel.push({
+            title: expect(tab.title, "no permissions for title"),
+            url: expect(tab.url, "no permissions for url"),
+            favicon: tab.favIconUrl || null,
+        });
+    }
+    localTabModel.tabs = tabModel;
+}
+
 document.addEventListener("alpine:init", () => {
-    localModel = Alpine.reactive(localModel);
-    remoteModel = Alpine.reactive(remoteModel);
-    // Note: it annoys me that the docs are not docs. What exactly can I return in the callback in data?
-    Alpine.data("localModel", () => localModel);
-    Alpine.data("remoteModel", () => remoteModel);
+    // Define Alpine types that we use for typescript checking
+    /** @type {{ reactive: <T>(v: T) => T, data: <T>(name: string, fn: () => T) => void }} */
+    const Alpine = /** @type {any} */ (globalThis).Alpine;
 
-    Alpine.data("glob", () => ({
-        grabTab: grabTab,
-        showDropdown: showDropdown,
+    localTabModel = Alpine.reactive(localTabModel);
+    Alpine.data("localTabModel", () => localTabModel);
+    remoteDeviceModel = Alpine.reactive(remoteDeviceModel);
+    Alpine.data("remoteDeviceModel", () => remoteDeviceModel);
+    dragModel = Alpine.reactive(dragModel);
+
+    Alpine.data("globalFunctions", () => ({
+        dragModel,
+        onDragStart,
+        onDragEnd: () => {
+            dragModel.sourcePane = null;
+            dragModel.tabData = null;
+        },
+        shouldShowHover: (/** @type {string} */name) => {
+            return dragModel.sourcePane !== name && dragModel.hoverPanes[name];
+        },
+        onDragOver: (/** @type {string} */name, /** @type {DragEvent} */ev) => {
+            ev.preventDefault();
+            dragModel.hoverPanes[name] = true;
+        },
+        onDragLeave: (/** @type {string} */name, /** @type {DragEvent} */ev, /** @type {HTMLElement} */el) => {
+            // Dismiss leave if we're entering the child
+            if (el.contains(/** @type {Node} */ (ev.relatedTarget))) {
+                return;
+            }
+            dragModel.hoverPanes[name] = false;
+        },
+        onDrop: (/** @type {string} */name, /** @type {DragEvent} */ev) => {
+            ev.preventDefault();
+
+            // TODO: This fires on drops of anything, not just the tab, and some things we could accept
+
+            if (dragModel.sourcePane !== name) {
+                console.log("Accepting drop to", name, dragModel.tabData);
+            }
+            // Since dragLeave doesn't fire in this case
+            dragModel.hoverPanes[name] = false;
+        },
     }));
 });
 
-// Note: why is Alpine.reactive and .effect not listed in globals??
-async function runAlpine() {
-    const baseUrl = "http://localhost:31337";
-    const token = await getTokenR(baseUrl, { username: "username", password: "password" });
+localTabModel.tabs = [
+    { title: "Take that you worm", favicon: "https://www.google.com/favicon.ico", url: "X" },
+    { title: "This will overflow with a really fucking cool effect if I do say so", favicon: null, url: "X" },
+    { title: "Whoa overlapping", favicon: null, url: "X" },
+];
+remoteDeviceModel.devices = [
+    { name: "lover", tabs: [
+        { title: "Take that you worm", favicon: null, url: "X" },
+        { title: "This will overflow with a really fucking cool effect if I do say so", favicon: "https://www.google.com/favicon.ico", url: "X" },
+    ] },
+    { name: "friend that you're not sure if anything will happen", tabs: [
+        { title: "Ward", favicon: "https://www.google.com/favicon.ico", url: "X" },
+        { title: "Infinite regression epilogues", favicon: null, url: "X" },
+    ] },
+];
 
-    // Populate the model for local tabs
-    const windows = await browser.windows.getAll({populate: true});
-    for (const w of windows) {
-        const winTabs = expect(w.tabs, "not enough tab permissions to get window tabs");
-        for (const tab of winTabs) {
-            const tabTitle = expect(tab.title, "not enough tab permissions to get tab title");
-            const tabUrl = expect(tab.url, "not enough tab permissions to get tab url");
-            const tabId = expect(tab.id, "not enough tab permissions to get tab id").toString();
-            const tabModel = {
-                id: tabId,
-                title: tabTitle,
-                url: tabUrl,
-            };
-            localModel.tabs.push(tabModel);
-        }
-    }
-
-    // Populate the model for remote tabs, gotten from the server
-    const peers = await getPeersR(baseUrl, token);
-    const peerNames = peers.peers.map(p => p.name);
-    populateDropdown(baseUrl, token, peerNames);
-
-    for (const peer of peers.peers) {
-        let peerModel = {
-            name: peer.name,
-            tabs: [],
-        };
-        for (const w of peer.windows) {
-            for (const tab of w.tabs) {
-                const tabModel = {
-                    id: tab.identity,
-                    title: tab.title,
-                    url: tab.url,
-                };
-                peerModel.tabs.push(tab);
-            }
-        }
-        remoteModel.devices.push(peerModel);
-    }
-
-    // Note: apparently there is a separate CSP build, that I have to run in
-    // firefox extensions. Apparently it's not 100% compatible with normal
-    // alpine
-    // Note: this doesn't fucking work, I get errors that the property is not
-    // found. Fucking garbage docs
-    console.log("====== govno ======", remoteModel);
-}
-
-runAlpine();
+// Populate tabs model initially, update it every time tabs change
+populateTabs();
+browser.tabs.onCreated.addListener(() => populateTabs());
+browser.tabs.onUpdated.addListener(() => populateTabs(), {properties: ["title"]})
+// Sleep is needed because at the moment of this even the tab is not yet removed
+browser.tabs.onRemoved.addListener(async () => { await sleep(100); populateTabs() });

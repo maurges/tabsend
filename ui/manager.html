@@ -3,75 +3,156 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
+
     <style>
-      #all-tabs {
-        marg * 2in-left: 0;
-        margin-right: 0;
+      * {
+        font-family: Arial, sans-serif;
+      }
+      .global-row {
+        margin: 100px auto 0 auto;
         display: flex;
-        flex-direction: row;
-        justify-content: space-around;
-        @media (max-width: 600px) {
-          flex-direction: column;
-        }
+        justify-content: center;
+        align-items: flex-start;
+        gap: 50px;
+        padding: 0 20px;
       }
 
-      .tab-pane {
+      .device-column {
+        width: 350px;
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        align-items: center;
+        gap: 10px;
       }
 
+      .tab-column {
+        width: 350px;
+        background-color: #fff;
+        border-radius: 15px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 20px 0;
+
+        > .device-title {
+          width: 226px; /* Aligns with the text of a tab with a favicon */
+          font-size: 18px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        > .placeholder {
+          text-align: center;
+          display: block;
+        }
+      }
       .tab {
-        width: 300px;
-        height: 30px;
-        @media (max-width: 300px) { width: 100%; }
-        border-radius: 5px;
+        box-sizing: border-box;
+        border-radius: 10px;
+        width: 320px;
+        height: 35px;
+
+        display: flex;
+        flex-direction: row;
+        padding: 10px 20px;
+        align-items: center;
+        gap: 5px;
+        background-color: #fff;
+
         &:hover {
           background-color: #e6e6e6;
         }
 
-        overflow: hidden;
-        white-space: nowrap;
-        text-overflow: ellipsis;
+        > img {
+          flex-shrink: 0;
+          width: 18px;
+          height: 18px;
+        }
+        > svg {
+          flex-shrink: 0;
+          width: 22px;
+          height: 22px;
+
+          &:hover {
+            background-color: #ccc;
+            border-radius: 3px;
+          }
+        }
+
+        > span {
+          flex-grow: 1;
+          text-align: left;
+          white-space: nowrap;
+          overflow: hidden;
+          mask-image: linear-gradient(to right, black calc(100% - 10px), transparent 100%);
+          font-size: 15px;
+          color: #333;
+        }
       }
     </style>
 
     <script src="./manager.js" defer=true></script>
     <script src="./alpine.js" defer=true></script>
   </head>
-  <body x-data="glob">
-    <h1> Tabs </h1>
-    <div id="all-tabs">
-      <div x-data="localModel" class="tab-pane">
+  <body x-data="globalFunctions" style="margin: 0; padding: 0; background-color: #fff">
+
+    <div class="global-row">
+
+      <div class="tab-column"
+           x-data="localTabModel"
+           x-on:dragover="onDragOver('__LOCAL', $event)"
+           x-on:dragleave="onDragLeave('__LOCAL', $event, $el)"
+           x-on:drop="onDrop('__LOCAL', $event)"
+      >
+        <div class="device-title"> Local </div>
         <template x-for="tab in tabs">
-          <div class="tab">
+          <div class="tab" draggable=true
+               x-on:dragstart="onDragStart($event, tab, '__LOCAL')"
+               x-on:dragend="onDragEnd()"
+          >
+            <img x-show="tab.favicon !== null" x-bind:src="tab.favicon"></img>
             <span x-text="tab.title"></span>
-            <button x-on:click="showDropdown($event, {url: tab.url, identity: tab.id, title: tab.title})">send</button>
+            <svg viewBox="0 0 22 22" xmlns="https://www.w3.org/2000/svg">
+              <line x1="7.5" y1="7.5" x2="14.5" y2="14.5" stroke="#555" stroke-width="2" stroke-linecap="round" />
+              <line x1="14.5" y1="7.5" x2="7.5" y2="14.5" stroke="#555" stroke-width="2" stroke-linecap="round" />
+            </svg>
           </div>
         </template>
+        <div class="tab placeholder" x-show="shouldShowHover('__LOCAL')">Send here</div> <!-- placeholder for drag -->
       </div>
-      <div x-data="remoteModel" class="tab-pane">
+
+      <div class="device-column" x-data="remoteDeviceModel">
         <template x-for="device in devices">
-          <div class="tab-pane">
-            <div style="font-weight: bold" x-text="device.name"></div>
+          <div class="tab-column"
+               x-on:dragover="onDragOver(device.name, $event)"
+               x-on:dragleave="onDragLeave(device.name, $event, $el)"
+               x-on:drop="onDrop(device.name, $event)"
+          >
+            <div class="device-title" x-text="device.name"></div>
             <template x-for="tab in device.tabs">
-              <div class="tab">
+              <div class="tab" draggable=true
+                   x-on:dragstart="onDragStart($event, tab, device.name)"
+                   x-on:dragend="onDragEnd()"
+              >
+                <img x-show="tab.favicon !== null" x-bind:src="tab.favicon"></img>
                 <span x-text="tab.title"></span>
-                <button x-on:click="grabTab('TODO baseUrl', 'TODO token', tab, device.name)">grab</button>
+                <svg viewBox="0 0 22 22" xmlns="https://www.w3.org/2000/svg">
+                  <line x1="7.5" y1="7.5" x2="14.5" y2="14.5" stroke="#555" stroke-width="2" stroke-linecap="round" />
+                  <line x1="14.5" y1="7.5" x2="7.5" y2="14.5" stroke="#555" stroke-width="2" stroke-linecap="round" />
+                </svg>
               </div>
             </template>
+            <div class="tab placeholder" x-show="shouldShowHover(device.name)">Send here</div> <!-- placeholder for drag -->
           </div>
+
         </template>
       </div>
+
     </div>
 
-    <div id="send-dropdown" style="
-      display: none;
-      position: fixed;
-      background: white;
-      border: 1px solid #000;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    ">
-    </div>
   </body>
 </html>

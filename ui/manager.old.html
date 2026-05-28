@@ -1,0 +1,77 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+      #all-tabs {
+        marg * 2in-left: 0;
+        margin-right: 0;
+        display: flex;
+        flex-direction: row;
+        justify-content: space-around;
+        @media (max-width: 600px) {
+          flex-direction: column;
+        }
+      }
+
+      .tab-pane {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .tab {
+        width: 300px;
+        height: 30px;
+        @media (max-width: 300px) { width: 100%; }
+        border-radius: 5px;
+        &:hover {
+          background-color: #e6e6e6;
+        }
+
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+    </style>
+
+    <script src="./manager.js" defer=true></script>
+    <script src="./alpine.js" defer=true></script>
+  </head>
+  <body x-data="glob">
+    <h1> Tabs </h1>
+    <div id="all-tabs">
+      <div x-data="localModel" class="tab-pane">
+        <template x-for="tab in tabs">
+          <div class="tab">
+            <span x-text="tab.title"></span>
+            <button x-on:click="showDropdown($event, {url: tab.url, identity: tab.id, title: tab.title})">send</button>
+          </div>
+        </template>
+      </div>
+      <div x-data="remoteModel" class="tab-pane">
+        <template x-for="device in devices">
+          <div class="tab-pane">
+            <div style="font-weight: bold" x-text="device.name"></div>
+            <template x-for="tab in device.tabs">
+              <div class="tab">
+                <span x-text="tab.title"></span>
+                <button x-on:click="grabTab('TODO baseUrl', 'TODO token', tab, device.name)">grab</button>
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <div id="send-dropdown" style="
+      display: none;
+      position: fixed;
+      background: white;
+      border: 1px solid #000;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    ">
+    </div>
+  </body>
+</html>
