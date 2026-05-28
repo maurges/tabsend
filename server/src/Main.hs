@@ -32,19 +32,13 @@ data TabInfo = TabInfo
     { url :: !Text
     , identity :: !Text -- ^ For disambiguation in grabbing
     , title :: !Text
-    }
-    deriving (Eq, Show, Generic)
-    deriving anyclass (FromJSON, ToJSON)
-data WindowInfo = WindowInfo
-    { title :: !Text
-    , identity :: !Int -- ^ For disambiguation in pushing
-    , tabs :: ![TabInfo]
+    , favicon :: !(Maybe Text)
     }
     deriving (Eq, Show, Generic)
     deriving anyclass (FromJSON, ToJSON)
 data PeerInfo = PeerInfo
     { name :: !Text
-    , windows :: ![WindowInfo]
+    , tabs :: ![TabInfo]
     }
     deriving (Eq, Show, Generic)
     deriving anyclass (FromJSON, ToJSON)
@@ -55,14 +49,12 @@ data PeersResp = PeersResp
     deriving anyclass (FromJSON, ToJSON)
 data PushedTab = PushedTab
     { url :: !Text
-    , windowId :: !Text
     }
     deriving (Eq, Show, Generic)
     deriving anyclass (FromJSON, ToJSON)
 
 data PushTabReq = PushTabReq
     { target :: !Text -- ^ Peer name
-    , windowId :: !Int
     , tab :: !TabInfo
     }
     deriving (Eq, Show, Generic)
@@ -76,7 +68,7 @@ data GrabTabReq = GrabTabReq
     deriving anyclass (FromJSON, ToJSON)
 
 data NotifyTabsReq = NotifyTabsReq
-    { windows :: ![WindowInfo]
+    { tabs :: ![TabInfo]
     }
     deriving (Eq, Show, Generic)
     deriving anyclass (FromJSON, ToJSON)
@@ -120,25 +112,13 @@ getPeers _token = do
         { peers =
             [ PeerInfo
                 { name = "The notebook"
-                , windows =
-                    [ WindowInfo
-                        { title = "Window 1"
-                        , identity = 0
-                        , tabs = map (\title -> TabInfo { url = "https://morj.men", title, identity = ""})
-                            ["Search", "Blog", "Tab3", "Tab4", "A very long name that cuts off and looks ugly"]
-                        }
-                    ]
+                , tabs = map (\title -> TabInfo { url = "https://morj.men", title, identity = "", favicon = Nothing})
+                    ["Search", "Blog", "Tab3", "Tab4", "A very long name that cuts off and looks ugly"]
                 }
             , PeerInfo
                 { name = "The Phone"
-                , windows =
-                    [ WindowInfo
-                        { title = "Window 1"
-                        , identity = 0
-                        , tabs = map (\title -> TabInfo { url = "https://morj.men", title, identity = ""})
-                            ["Not Search", "Not Blog", "Not Tab3", "Not Tab4", "Not A very long name that cuts off and looks ugly"]
-                        }
-                    ]
+                , tabs = map (\title -> TabInfo { url = "https://morj.men", title, identity = "", favicon = Nothing})
+                    ["Not Search", "Not Blog", "Not Tab3", "Not Tab4", "Not A very long name that cuts off and looks ugly"]
                 }
             ]
         }

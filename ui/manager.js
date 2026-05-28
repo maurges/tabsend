@@ -32,7 +32,7 @@ function expect(x, s) {
 }
 
 
-async function sleep(time) {
+async function sleep(/** @type {number} */time) {
     return new Promise(accept => setTimeout(accept, time));
 }
 
@@ -44,7 +44,7 @@ async function sleep(time) {
 
 /** @typedef {{username: string, password: string}} TokenReq */
 /** @typedef {{url: string, identity: string, title: string, favicon: string | null}} TabInfo */
-/** @typedef {{name: string, windows: TabInfo[]}} PeerInfo */
+/** @typedef {{name: string, tabs: TabInfo[]}} PeerInfo */
 /** @typedef {{peers: PeerInfo[]}} PeersResp */
 /** @typedef {{target: string, tab: TabInfo}} PushTabReq */
 /** @typedef {{target: string, tabIdentity: string}} GrabTabReq */
@@ -159,7 +159,7 @@ let remoteDeviceModel = { devices: [] };
 /** @type {{ hoverPanes: {[name: string]: boolean}, sourcePane: string | null, tabData: TabData | null }} */
 let dragModel = { hoverPanes: {}, sourcePane: null, tabData: null };
 
-async function populateTabs() {
+async function populateLocalTabs() {
     const tabs = await browser.tabs.query({});
     let tabModel = [];
     for (const tab of tabs) {
@@ -170,6 +170,15 @@ async function populateTabs() {
         });
     }
     localTabModel.tabs = tabModel;
+}
+
+async function populateRemoteTabs() {
+    // TODO
+    const baseUrl = "http://localhost:31337";
+    const token = await getTokenR(baseUrl, { username: "username", password: "password" });
+
+    const resp = await getPeersR(baseUrl, token);
+    remoteDeviceModel.devices = resp.peers;
 }
 
 document.addEventListener("alpine:init", () => {
@@ -218,25 +227,11 @@ document.addEventListener("alpine:init", () => {
     }));
 });
 
-localTabModel.tabs = [
-    { title: "Take that you worm", favicon: "https://www.google.com/favicon.ico", url: "X" },
-    { title: "This will overflow with a really fucking cool effect if I do say so", favicon: null, url: "X" },
-    { title: "Whoa overlapping", favicon: null, url: "X" },
-];
-remoteDeviceModel.devices = [
-    { name: "lover", tabs: [
-        { title: "Take that you worm", favicon: null, url: "X" },
-        { title: "This will overflow with a really fucking cool effect if I do say so", favicon: "https://www.google.com/favicon.ico", url: "X" },
-    ] },
-    { name: "friend that you're not sure if anything will happen", tabs: [
-        { title: "Ward", favicon: "https://www.google.com/favicon.ico", url: "X" },
-        { title: "Infinite regression epilogues", favicon: null, url: "X" },
-    ] },
-];
-
 // Populate tabs model initially, update it every time tabs change
-populateTabs();
-browser.tabs.onCreated.addListener(() => populateTabs());
-browser.tabs.onUpdated.addListener(() => populateTabs(), {properties: ["title"]})
+populateLocalTabs();
+browser.tabs.onCreated.addListener(() => populateLocalTabs());
+browser.tabs.onUpdated.addListener(() => populateLocalTabs(), {properties: ["title"]})
 // Sleep is needed because at the moment of this even the tab is not yet removed
-browser.tabs.onRemoved.addListener(async () => { await sleep(100); populateTabs() });
+browser.tabs.onRemoved.addListener(async () => { await sleep(100); populateLocalTabs() });
+
+populateRemoteTabs();
