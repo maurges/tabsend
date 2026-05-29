@@ -53,6 +53,7 @@ async function sleep(/** @type {number} */time) {
  *      identity: string,
  *      title: string,
  *      favicon: string | null,
+ *      state?: "grayed",
  *  }} TabInfo
  */
 
@@ -217,6 +218,13 @@ async function onDrop(deviceName, ev) {
             {target: sourcePane, tabId: tabData.identity},
         );
     } else {
+        // Draw a grayed-out tab on remote device until it's received
+        tabData.state = "grayed";
+        const targetDevice = remoteDeviceModel.devices.find(d => d.name === deviceName);
+        if (targetDevice) {
+            targetDevice.tabs.push(tabData);
+        }
+
         await pushTabR(
             expect(baseUrl, "XXX base url unset"),
             expect(token, "XXX token unset"),

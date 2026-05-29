@@ -93,6 +93,10 @@
           color: #333;
         }
       }
+      .tab.tab-grayed {
+        background-color: #ddd;
+        opacity: 50%;
+      }
     </style>
 
     <script src="./manager.js" defer=true></script>
@@ -110,7 +114,8 @@
       >
         <div class="device-title"> Local </div>
         <template x-for="tab in tabs">
-          <div class="tab" draggable=true
+          <div draggable=true
+               x-bind:class="tab.state === 'grayed' ? 'tab tab-grayed' : 'tab'"
                x-on:dragstart="onDragStart($event, tab, '__LOCAL')"
                x-on:dragend="onDragEnd()"
           >
@@ -134,7 +139,8 @@
           >
             <div class="device-title" x-text="device.name"></div>
             <template x-for="tab in device.tabs">
-              <div class="tab" draggable=true
+              <div draggable=true
+                   x-bind:class="tab.state === 'grayed' ? 'tab tab-grayed' : 'tab'"
                    x-on:dragstart="onDragStart($event, tab, device.name)"
                    x-on:dragend="onDragEnd()"
               >
