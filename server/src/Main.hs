@@ -112,12 +112,12 @@ getPeers _token = do
         { peers =
             [ PeerInfo
                 { name = "The notebook"
-                , tabs = map (\title -> TabInfo { url = "https://morj.men", title, identity = "", favicon = Nothing})
+                , tabs = map (\title -> TabInfo { url = "https://morj.men", title, identity = title, favicon = Nothing})
                     ["Search", "Blog", "Tab3", "Tab4", "A very long name that cuts off and looks ugly"]
                 }
             , PeerInfo
                 { name = "The Phone"
-                , tabs = map (\title -> TabInfo { url = "https://morj.men", title, identity = "", favicon = Nothing})
+                , tabs = map (\title -> TabInfo { url = "https://morj.men", title, identity = title, favicon = Nothing})
                     ["Not Search", "Not Blog", "Not Tab3", "Not Tab4", "Not A very long name that cuts off and looks ugly"]
                 }
             ]

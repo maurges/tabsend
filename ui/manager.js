@@ -47,12 +47,17 @@ async function sleep(/** @type {number} */time) {
 /** @typedef {{name: string, tabs: TabInfo[]}} PeerInfo */
 /** @typedef {{peers: PeerInfo[]}} PeersResp */
 /** @typedef {{target: string, tab: TabInfo}} PushTabReq */
-/** @typedef {{target: string, tabIdentity: string}} GrabTabReq */
+/** @typedef {{target: string, tabId: string}} GrabTabReq */
 
 
 /*********************************/
 /****** Request definitions ******/
 /*********************************/
+
+/** @type {string | null} */
+let baseUrl = null; // TODO idk
+/** @type {string | null} */
+let token = null;
 
 /**
  * @param {string} baseUrl
@@ -132,12 +137,9 @@ async function grabTabR(baseUrl, authToken, req) {
 /***********************/
 
 
-/** @typedef {{ title: string, favicon: string|null, url: string }} TabData */
-
-
 /**
  * @param {DragEvent} e
- * @param {TabData} tab
+ * @param {TabInfo} tab
  * @param {string} deviceName
  */
 function onDragStart(e, tab, deviceName) {
@@ -151,22 +153,62 @@ function onDragStart(e, tab, deviceName) {
     e.dataTransfer.setData("text/plain", tab.title)
 }
 
+/**
+ * @param {string} deviceName
+ * @param {DragEvent} ev
+ */
+async function onDrop(deviceName, ev) {
+    ev.preventDefault();
+    // Since dragLeave doesn't fire in this case, we unset the hover
+    dragModel.hoverPanes[deviceName] = false;
 
-/** @type {{ tabs: TabData[] }} */
+    // TODO: This fires on drops of anything, not just the tab, and some things we could accept
+
+    if (dragModel.sourcePane !== deviceName && dragModel.tabData !== null && dragModel.sourcePane !== null) {
+        console.log("Accepting drop to", deviceName, dragModel.tabData);
+    } else {
+        return;
+    }
+
+    // We have to copy it from global, otherwise the 'dragend' handler may fire
+    // after the await point and overwrite them with null
+    const tabData = dragModel.tabData;
+    const sourcePane = dragModel.sourcePane;
+
+    if (deviceName == '__LOCAL') {
+        // Create tab on this device
+        await browser.tabs.create({
+            active: false,
+            url: tabData.url,
+        });
+        await grabTabR(
+            expect(baseUrl, "XXX base url unset"),
+            expect(token, "XXX token unset"),
+            {target: sourcePane, tabId: tabData.identity}
+        );
+    }
+}
+
+
+/** @type {{ tabs: TabInfo[] }} */
 let localTabModel = { tabs: [] };
-/** @type {{ devices: { name: string, tabs: TabData[] }[] }} */
+/** @type {{ devices: { name: string, tabs: TabInfo[] }[] }} */
 let remoteDeviceModel = { devices: [] };
-/** @type {{ hoverPanes: {[name: string]: boolean}, sourcePane: string | null, tabData: TabData | null }} */
+/** @type {{ hoverPanes: {[name: string]: boolean}, sourcePane: string | null, tabData: TabInfo | null }} */
 let dragModel = { hoverPanes: {}, sourcePane: null, tabData: null };
 
-async function populateLocalTabs() {
-    const tabs = await browser.tabs.query({});
+/**
+ * @param {browser.tabs.Tab[]=} mbQueried
+ */
+async function populateLocalTabs(mbQueried) {
+    const tabs = mbQueried || await browser.tabs.query({});
     let tabModel = [];
     for (const tab of tabs) {
         tabModel.push({
             title: expect(tab.title, "no permissions for title"),
             url: expect(tab.url, "no permissions for url"),
             favicon: tab.favIconUrl || null,
+            identity: expect(tab.id, "no permission for id").toString(),
         });
     }
     localTabModel.tabs = tabModel;
@@ -174,8 +216,8 @@ async function populateLocalTabs() {
 
 async function populateRemoteTabs() {
     // TODO
-    const baseUrl = "http://localhost:31337";
-    const token = await getTokenR(baseUrl, { username: "username", password: "password" });
+    baseUrl = "http://localhost:31337";
+    token = await getTokenR(baseUrl, { username: "username", password: "password" });
 
     const resp = await getPeersR(baseUrl, token);
     remoteDeviceModel.devices = resp.peers;
@@ -213,17 +255,7 @@ document.addEventListener("alpine:init", () => {
             }
             dragModel.hoverPanes[name] = false;
         },
-        onDrop: (/** @type {string} */name, /** @type {DragEvent} */ev) => {
-            ev.preventDefault();
-
-            // TODO: This fires on drops of anything, not just the tab, and some things we could accept
-
-            if (dragModel.sourcePane !== name) {
-                console.log("Accepting drop to", name, dragModel.tabData);
-            }
-            // Since dragLeave doesn't fire in this case
-            dragModel.hoverPanes[name] = false;
-        },
+        onDrop,
     }));
 });
 
@@ -231,7 +263,18 @@ document.addEventListener("alpine:init", () => {
 populateLocalTabs();
 browser.tabs.onCreated.addListener(() => populateLocalTabs());
 browser.tabs.onUpdated.addListener(() => populateLocalTabs(), {properties: ["title"]})
-// Sleep is needed because at the moment of this even the tab is not yet removed
-browser.tabs.onRemoved.addListener(async () => { await sleep(100); populateLocalTabs() });
+browser.tabs.onRemoved.addListener(async () => {
+    // Since when the event is fired, the tab is not yet removed, we query the
+    // tabs several times with a delay to hopefully catch it
+    for (let i = 0; i < 10; ++i) {
+        await sleep(100);
+        const newTabs = await browser.tabs.query({});
+        if (newTabs.length !== localTabModel.tabs.length) {
+            await populateLocalTabs(newTabs);
+            return;
+        }
+    }
+});
 
 populateRemoteTabs();
+// TODO populate on interval
