@@ -243,6 +243,8 @@ async function onDrop(deviceName, ev) {
                 {target: sourcePane, tabId: tabData.identity},
             );
         }
+        // Enqueue populating remote tabs
+        populateRemoteTabs();
     }
 }
 
@@ -271,7 +273,26 @@ async function populateLocalTabs(mbQueried) {
     localTabModel.tabs = tabModel;
 }
 
+let lastPopulated = Date.now() - 1000;
+let timerId /** @type {number | null} */ = null;
 async function populateRemoteTabs() {
+    // Prevent being requested too much
+    const now = Date.now();
+    const diff = now - lastPopulated;
+    if (diff < 1000) {
+        if (!timerId) {
+            // Enqueue execution
+            const toWait = 1000 - diff;
+            timerId = setTimeout(() => {
+                // reset the timer and call it again
+                timerId = null;
+                populateRemoteTabs();
+            }, toWait);
+        }
+        return;
+    }
+    lastPopulated = now;
+
     // TODO
     baseUrl = "http://localhost:31337";
     token = await getTokenR(baseUrl, { username: "username", password: "password" });
