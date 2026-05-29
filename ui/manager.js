@@ -42,12 +42,42 @@ async function sleep(/** @type {number} */time) {
 /******************************/
 
 
-/** @typedef {{username: string, password: string}} TokenReq */
-/** @typedef {{url: string, identity: string, title: string, favicon: string | null}} TabInfo */
-/** @typedef {{name: string, tabs: TabInfo[]}} PeerInfo */
-/** @typedef {{peers: PeerInfo[]}} PeersResp */
-/** @typedef {{target: string, tab: TabInfo}} PushTabReq */
-/** @typedef {{target: string, tabId: string}} GrabTabReq */
+/** @typedef {{
+ *      username: string,
+ *      password: string,
+ *  }} TokenReq
+ */
+
+/** @typedef {{
+ *      url: string,
+ *      identity: string,
+ *      title: string,
+ *      favicon: string | null,
+ *  }} TabInfo
+ */
+
+/** @typedef {{
+ *      name: string,
+ *      tabs: TabInfo[],
+ *  }} PeerInfo
+ */
+
+/** @typedef {{
+ *      peers: PeerInfo[],
+ *  }} PeersResp
+ */
+
+/** @typedef {{
+ *      target: string,
+ *      tab: TabInfo,
+ *  }} PushTabReq
+ */
+
+/** @typedef {{
+ *      target: string,
+ *      tabId: string,
+ *  }} GrabTabReq
+ */
 
 
 /*********************************/
@@ -175,7 +205,7 @@ async function onDrop(deviceName, ev) {
     const tabData = dragModel.tabData;
     const sourcePane = dragModel.sourcePane;
 
-    if (deviceName == '__LOCAL') {
+    if (deviceName == "__LOCAL") {
         // Create tab on this device
         await browser.tabs.create({
             active: false,
@@ -184,8 +214,27 @@ async function onDrop(deviceName, ev) {
         await grabTabR(
             expect(baseUrl, "XXX base url unset"),
             expect(token, "XXX token unset"),
-            {target: sourcePane, tabId: tabData.identity}
+            {target: sourcePane, tabId: tabData.identity},
         );
+    } else {
+        await pushTabR(
+            expect(baseUrl, "XXX base url unset"),
+            expect(token, "XXX token unset"),
+            {target: deviceName, tab: tabData},
+        );
+        if (sourcePane == "__LOCAL") {
+            const tabId = parseInt(tabData.identity);
+            if (isNaN(tabId)) {
+                panic("Local tab id is invalid");
+            }
+            await browser.tabs.remove(tabId);
+        } else {
+            await grabTabR(
+                expect(baseUrl, "XXX base url unset"),
+                expect(token, "XXX token unset"),
+                {target: sourcePane, tabId: tabData.identity},
+            );
+        }
     }
 }
 

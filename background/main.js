@@ -33,13 +33,39 @@ function expect(x, s) {
 /******************************/
 
 
-/** @typedef {{username: string, password: string}} TokenReq */
-/** @typedef {{url: string, identity: string, title: string}} TabInfo */
-/** @typedef {{title: string, identity: number, tabs: TabInfo[]}} WindowInfo */
-/** @typedef {{name: string, windows: WindowInfo[]}} PeerInfo */
-/** @typedef {{url: string, windowId: number}} PushedTab */
-/** @typedef {{windows: WindowInfo[]}} NotifyTabReq */
-/** @typedef {{tabs: PushedTab[]}} NotifyTabResp */
+/** @typedef {{
+ *      username: string,
+ *      password: string,
+ *  }} TokenReq
+ */
+
+/** @typedef {{
+ *      url: string,
+ *      identity: string,
+ *      title: string,
+ *      favicon: string | null,
+ *  }} TabInfo
+ */
+
+/** @typedef {{
+ *      name: string,
+ *      tabs: TabInfo[],
+ *  }} PeerInfo
+ */
+
+/** @typedef {{
+ *      url: string,
+ *  }} PushedTab
+ */
+
+/** @typedef {{
+ *      tabs: TabInfo[],
+ *  }} NotifyTabReq
+ */
+/** @typedef {{
+ *      tabs: PushedTab[],
+ *  }} NotifyTabResp
+ */
 
 
 /*********************************/
@@ -108,30 +134,20 @@ browser.browserAction.onClicked.addListener(() => {
 });
 
 /**
- * @returns {Promise<WindowInfo[]>}
+ * @returns {Promise<TabInfo[]>}
  */
 async function buildState() {
-    const windows = await browser.windows.getAll({populate: true});
-    let ws = [];
-    for (const w of windows) {
-        const title = expect(w.title, "not enough tab permissions to get window title");
-        const identity = expect(w.id, "not enough tab persmissions to get window id");
-        let ts = [];
-        const tabs = expect(w.tabs, "not enough tab permissions to get window tabs");
-        for (const t of tabs) {
-            ts.push({
-                url: expect(t.url, "not enough tab permissions to get tab url"),
-                identity: expect(t.id, "not enough tab permissions to get tab id").toString(),
-                title: expect(t.title, "not enough tab permissions to get tab title"),
-            })
-        }
-        ws.push({
-            title,
-            identity,
-            tabs: ts,
-        });
+    const localTabs = await browser.tabs.query({});
+    let tabs = [];
+    for (const tab of localTabs) {
+        tabs.push({
+            url: expect(tab.url, "not enough tab permissions to get tab url"),
+            identity: expect(tab.id, "not enough tab permissions to get tab id").toString(),
+            title: expect(tab.title, "not enough tab permissions to get tab title"),
+            favicon: expect(tab.favIconUrl, "not enough tab permissions to get tab favicon"),
+        })
     }
-    return ws;
+    return tabs;
 }
 
 // periodically notify the server about our tab state
@@ -139,9 +155,9 @@ browser.alarms.onAlarm.addListener(async (a) => {
     if (token === null)  return;
     if (a.name !== "tab-notify")  return;
 
-    const windows = await buildState();
+    const tabs = await buildState();
 
-    const req = { windows };
+    const req = { tabs };
     const resp = await updateTabs(baseUrl, token, req);
 
     // create new received tabs
@@ -149,7 +165,6 @@ browser.alarms.onAlarm.addListener(async (a) => {
         await browser.tabs.create({
             active: false,
             url: tab.url,
-            windowId: tab.windowId,
         });
     }
 });
