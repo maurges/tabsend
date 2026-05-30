@@ -74,12 +74,11 @@ function expect(x, s) {
 
 
 /**
- * @param {string} baseUrl
  * @param {string} username
  * @param {string} password
  * @returns {Promise<string>}
  */
-async function getToken(baseUrl, username, password) {
+async function getToken(username, password) {
     const url = baseUrl + "/token";
     const r = await fetch(url, {
         method: "POST",
@@ -92,19 +91,17 @@ async function getToken(baseUrl, username, password) {
 }
 
 /**
- * @param {string} baseUrl
- * @param {string} authToken
  * @param {NotifyTabReq} req
  * @returns {Promise<NotifyTabResp>}
  */
-async function updateTabs(baseUrl, authToken, req) {
+async function updateTabs(req) {
     const url = baseUrl + "/update";
     const r = await fetch(url, {
         method: "POST",
         body: JSON.stringify(req),
         headers: {
             "Content-Type": "application/json",
-            "X-Tabsend-Auth": authToken,
+            "X-Tabsend-Auth": expect(accessToken, "access token not yet set"),
         },
     });
     return r.json(); // TODO proper parsing
@@ -116,15 +113,26 @@ async function updateTabs(baseUrl, authToken, req) {
 /****************************/
 
 
-const username = "user";
-const password = "password";
-const baseUrl = "http://localhost:31337"; // TODO should be set in config
+// Token and url are stored in the settings, without them set nothing works
 /** @type {string | null} */
-let token = null;
+let baseUrl = null; // TODO idk
+/** @type {string | null} */
+let accessToken = null;
+browser.storage.local.get(["remote-url", "access-token"]).then(async r => {
+    baseUrl = r["remote-url"];
+    accessToken = r["access-token"];
+});
+browser.storage.onChanged.addListener(async (changes, areaName) => {
+    if (areaName !== "local")  return;
 
-// fetch the token from the server
-getToken(baseUrl, username, password)
-    .then(t => { token = t });
+    if (changes["remote-url"]) {
+        baseUrl = changes["remote-url"].newValue;
+    }
+    if (changes["access-token"]) {
+        baseUrl = changes["access-token"].newValue;
+    }
+});
+
 
 // set the script button to open the manager
 browser.browserAction.onClicked.addListener(() => {
@@ -152,13 +160,13 @@ async function buildState() {
 
 // periodically notify the server about our tab state
 browser.alarms.onAlarm.addListener(async (a) => {
-    if (token === null)  return;
+    if (accessToken === null)  return;
     if (a.name !== "tab-notify")  return;
 
     const tabs = await buildState();
 
     const req = { tabs };
-    const resp = await updateTabs(baseUrl, token, req);
+    const resp = await updateTabs(req);
 
     // create new received tabs
     for (const tab of resp.tabs) {

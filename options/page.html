@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title> Tabsend options </title>
+
+    <script src="./page.js" defer=true></script>
+
+    <style>
+      * {
+        font-family: Arial, sans-serif;
+      }
+      form {
+        margin: 20px auto 0 auto;
+        display: table;
+        > div {
+          display: table-row;
+          > label, input {
+            display: table-cell;
+            margin-bottom: 10px;
+          }
+          > label {
+            padding-right: 10px;
+          }
+          > input {
+            width: 300px;
+          }
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <form action="">
+      <div>
+        <label for="url"> Server URL </label>
+        <input type="text" name="url" id="input-url"></input>
+      </div>
+
+      <div>
+        <label for="token"> Access token </label>
+        <input type="text" name="token" id="input-token"></input>
+      </div>
+    </form>
+  </body>
+</html>

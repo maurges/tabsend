@@ -85,18 +85,42 @@ async function sleep(/** @type {number} */time) {
 /****** Request definitions ******/
 /*********************************/
 
+
+// Token and url are stored in the settings, without them set nothing works
 /** @type {string | null} */
 let baseUrl = null; // TODO idk
 /** @type {string | null} */
-let token = null;
+let accessToken = null;
+browser.storage.local.get(["remote-url", "access-token"]).then(async r => {
+    baseUrl = r["remote-url"];
+    accessToken = r["access-token"];
+    await populateRemoteTabs();
+});
+browser.storage.onChanged.addListener(async (changes, areaName) => {
+    if (areaName !== "local")  return;
+
+    let didChange = false;
+    if (changes["remote-url"]) {
+        baseUrl = changes["remote-url"].newValue;
+        didChange = true;
+    }
+    if (changes["access-token"]) {
+        baseUrl = changes["access-token"].newValue;
+        didChange = true;
+    }
+
+    if (didChange) {
+        await populateRemoteTabs();
+    }
+});
+
 
 /**
- * @param {string} baseUrl
  * @param {TokenReq} req
  * @returns {Promise<string>}
  */
-async function getTokenR(baseUrl, req) {
-    const url = baseUrl + "/token";
+async function getTokenR(req) {
+    const url = expect(baseUrl, "base url not yet set") + "/token";
     const r = await fetch(url, {
         method: "POST",
         body: JSON.stringify(req),
@@ -108,16 +132,14 @@ async function getTokenR(baseUrl, req) {
 }
 
 /**
- * @param {string} baseUrl
- * @param {string} authToken
  * @returns {Promise<PeersResp>}
  */
-async function getPeersR(baseUrl, authToken) {
-    const url = baseUrl + "/get-peers";
+async function getPeersR() {
+    const url = expect(baseUrl, "base url not yet set") + "/get-peers";
     const r = await fetch(url, {
         method: "GET",
         headers: {
-            "X-Tabsend-Auth": authToken,
+            "X-Tabsend-Auth": expect(accessToken, "token not yet set"),
         },
     });
     // TODO: parse json
@@ -125,38 +147,34 @@ async function getPeersR(baseUrl, authToken) {
 }
 
 /**
- * @param {string} baseUrl
- * @param {string} authToken
  * @param {PushTabReq} req
  * @returns {Promise<string>}
  */
-async function pushTabR(baseUrl, authToken, req) {
-    const url = baseUrl + "/push-tab";
+async function pushTabR(req) {
+    const url = expect(baseUrl, "base url not yet set") + "/push-tab";
     const r = await fetch(url, {
         method: "POST",
         body: JSON.stringify(req),
         headers: {
             "Content-Type": "application/json",
-            "X-Tabsend-Auth": authToken,
+            "X-Tabsend-Auth": expect(accessToken, "token not yet set"),
         },
     });
     return r.text();
 }
 
 /**
- * @param {string} baseUrl
- * @param {string} authToken
  * @param {GrabTabReq} req
  * @returns {Promise<string>}
  */
-async function grabTabR(baseUrl, authToken, req) {
-    const url = baseUrl + "/grab-tab";
+async function grabTabR(req) {
+    const url = expect(baseUrl, "base url not yet set") + "/grab-tab";
     const r = await fetch(url, {
         method: "POST",
         body: JSON.stringify(req),
         headers: {
             "Content-Type": "application/json",
-            "X-Tabsend-Auth": authToken,
+            "X-Tabsend-Auth": expect(accessToken, "token not yet set"),
         },
     });
     return r.text();
@@ -213,8 +231,6 @@ async function onDrop(deviceName, ev) {
             url: tabData.url,
         });
         await grabTabR(
-            expect(baseUrl, "XXX base url unset"),
-            expect(token, "XXX token unset"),
             {target: sourcePane, tabId: tabData.identity},
         );
     } else {
@@ -226,8 +242,6 @@ async function onDrop(deviceName, ev) {
         }
 
         await pushTabR(
-            expect(baseUrl, "XXX base url unset"),
-            expect(token, "XXX token unset"),
             {target: deviceName, tab: tabData},
         );
         if (sourcePane == "__LOCAL") {
@@ -238,8 +252,6 @@ async function onDrop(deviceName, ev) {
             await browser.tabs.remove(tabId);
         } else {
             await grabTabR(
-                expect(baseUrl, "XXX base url unset"),
-                expect(token, "XXX token unset"),
                 {target: sourcePane, tabId: tabData.identity},
             );
         }
@@ -274,7 +286,7 @@ async function populateLocalTabs(mbQueried) {
 }
 
 let lastPopulated = Date.now() - 1000;
-let timerId /** @type {number | null} */ = null;
+let /** @type {number | null} */ timerId = null;
 async function populateRemoteTabs() {
     // Prevent being requested too much
     const now = Date.now();
@@ -293,11 +305,7 @@ async function populateRemoteTabs() {
     }
     lastPopulated = now;
 
-    // TODO
-    baseUrl = "http://localhost:31337";
-    token = await getTokenR(baseUrl, { username: "username", password: "password" });
-
-    const resp = await getPeersR(baseUrl, token);
+    const resp = await getPeersR();
     remoteDeviceModel.devices = resp.peers;
 }
 
@@ -334,6 +342,8 @@ document.addEventListener("alpine:init", () => {
             dragModel.hoverPanes[name] = false;
         },
         onDrop,
+
+        openOptions: () => { browser.runtime.openOptionsPage() },
     }));
 });
 
@@ -354,5 +364,5 @@ browser.tabs.onRemoved.addListener(async () => {
     }
 });
 
-populateRemoteTabs();
-// TODO populate on interval
+// populateRemoteTabs();
+// setInterval(populateRemoteTabs, 5000);

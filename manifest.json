@@ -14,9 +14,13 @@
 , "background":
     { "scripts": ["background/main.js"]
     }
+, "options_ui":
+    { "page": "options/page.html"
+    }
 , "permissions":
     [ "alarms"
     , "tabs"
+    , "storage"
     , "http://localhost:31337/*"
     , "http://localhost/*"
     ]
