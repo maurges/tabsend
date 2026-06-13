@@ -105,7 +105,7 @@ browser.storage.onChanged.addListener(async (changes, areaName) => {
         didChange = true;
     }
     if (changes["access-token"]) {
-        baseUrl = changes["access-token"].newValue;
+        accessToken = changes["access-token"].newValue;
         didChange = true;
     }
 
@@ -120,7 +120,7 @@ browser.storage.onChanged.addListener(async (changes, areaName) => {
  * @returns {Promise<string>}
  */
 async function getTokenR(req) {
-    const url = expect(baseUrl, "base url not yet set") + "/token";
+    const url = expect(baseUrl, "base url not yet set") + "token";
     const r = await fetch(url, {
         method: "POST",
         body: JSON.stringify(req),
@@ -135,7 +135,7 @@ async function getTokenR(req) {
  * @returns {Promise<PeersResp>}
  */
 async function getPeersR() {
-    const url = expect(baseUrl, "base url not yet set") + "/get-peers";
+    const url = expect(baseUrl, "base url not yet set") + "get-peers";
     const r = await fetch(url, {
         method: "GET",
         headers: {
@@ -151,7 +151,7 @@ async function getPeersR() {
  * @returns {Promise<string>}
  */
 async function pushTabR(req) {
-    const url = expect(baseUrl, "base url not yet set") + "/push-tab";
+    const url = expect(baseUrl, "base url not yet set") + "push-tab";
     const r = await fetch(url, {
         method: "POST",
         body: JSON.stringify(req),
@@ -168,7 +168,7 @@ async function pushTabR(req) {
  * @returns {Promise<string>}
  */
 async function grabTabR(req) {
-    const url = expect(baseUrl, "base url not yet set") + "/grab-tab";
+    const url = expect(baseUrl, "base url not yet set") + "grab-tab";
     const r = await fetch(url, {
         method: "POST",
         body: JSON.stringify(req),

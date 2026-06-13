@@ -9,9 +9,20 @@
       * {
         font-family: Arial, sans-serif;
       }
-      .global-row {
-        margin: 100px auto 0 auto;
+
+      .global-column {
+        margin: 50px auto 0 auto;
+        width: 790px;
         display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 50px;
+      }
+
+      .global-row {
+        display: flex;
+        flex-direction: row;
         justify-content: center;
         align-items: flex-start;
         gap: 50px;
@@ -103,7 +114,7 @@
     <script src="./manager.js" defer=true></script>
     <script src="./alpine.js" defer=true></script>
   </head>
-  <body x-data="globalFunctions" style="margin: 0; padding: 0; background-color: #fff">
+  <body x-data="globalFunctions" class="global-column" style="background-color: #fff">
 
     <div class="global-row">
 
@@ -160,7 +171,8 @@
       </div>
 
     </div>
-    <button x-on:click="openOptions()">options</button>
+
+    <button x-on:click="openOptions()" style="width: 100px; align-self: flex-end;">options</button>
 
   </body>
 </html>

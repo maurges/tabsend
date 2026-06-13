@@ -14,15 +14,16 @@ function panic(s) {
 }
 
 /**
+ * @template {HTMLElement} T
  * @param {string} id
- * @returns {HTMLElement}
+ * @returns {T}
  */
 function byId(id) {
     const r = document.getElementById(id);
     if (!r) {
         panic(`${id} not found`);
     }
-    return r;
+    return /** @type {T} */ (r);
 }
 
 /** Debounce for an event handler
@@ -44,12 +45,17 @@ function debounce(func, delay) {
 }
 
 
-/**
- * @param {Event} ev
- */
-function urlChanged(ev) {
-    const elem = /** @type {HTMLInputElement} */ (ev.target);
-    browser.storage.local.set({"remote-url": elem.value});
+async function urlChanged() {
+    console.log("requesting perm");
+    const r = await browser.permissions.request({
+        origins: [inputUrl.value],
+    });
+    if (r) {
+        browser.storage.local.set({"remote-url": inputUrl.value});
+        console.log("Accepted");
+    } else {
+        console.log("Permission denied on url " + inputUrl.value);
+    }
 }
 
 /**
@@ -60,14 +66,18 @@ function tokenChanged(ev) {
     browser.storage.local.set({"access-token": elem.value});
 }
 
+/** @type {HTMLInputElement} */
 const inputUrl = byId("input-url");
+/** @type {HTMLInputElement} */
 const inputToken = byId("input-token");
-inputUrl.addEventListener("input", debounce(urlChanged, 2000));
+/** @type {HTMLButtonElement} */
+const buttonUrl = byId("button-url");
+
+buttonUrl.addEventListener("click", urlChanged)
 inputToken.addEventListener("input", debounce(tokenChanged, 1000));
 
 // populate the two fields initially
 browser.storage.local.get(["remote-url", "access-token"]).then(async r => {
-    inputUrl.value = r["remote-url"];
-    inputToken.value = r["access-token"];
-    await populateRemoteTabs();
+    inputUrl.value = r["remote-url"] || "";
+    inputToken.value = r["access-token"] || "";
 });

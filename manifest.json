@@ -21,7 +21,8 @@
     [ "alarms"
     , "tabs"
     , "storage"
-    , "http://localhost:31337/*"
-    , "http://localhost/*"
+    ]
+, "optional_permissions":
+    [ "<all_urls>"
     ]
 }
