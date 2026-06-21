@@ -46,15 +46,35 @@ function debounce(func, delay) {
 
 
 async function urlChanged() {
-    console.log("requesting perm");
+    let input = inputUrl.value;
+    if (!input.startsWith("http")) {
+        input = "http://" + input;
+    }
+
+    let url;
+    try {
+        url = new URL(input);
+    } catch {
+        console.log("Invalid url TODO notify user");
+        return;
+    }
+    const remoteUrl = url.toString();
+
+    // Firefox doesn't handle port correctly when requesting the permissions,
+    // but it seems to be ignored when matching
+    const matchPattern = url.toString() + "*";
+    url.port = "";
+    const matchPatternNoPort = url.toString() + "*";
+
+    console.log("requesting perm", url, matchPattern);
     const r = await browser.permissions.request({
-        origins: [inputUrl.value],
+        origins: [matchPattern, matchPatternNoPort],
     });
     if (r) {
-        browser.storage.local.set({"remote-url": inputUrl.value});
+        browser.storage.local.set({"remote-url": remoteUrl});
         console.log("Accepted");
     } else {
-        console.log("Permission denied on url " + inputUrl.value);
+        console.log("Permission denied on url");
     }
 }
 
