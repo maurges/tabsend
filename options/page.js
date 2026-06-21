@@ -66,15 +66,13 @@ async function urlChanged() {
     url.port = "";
     const matchPatternNoPort = url.toString() + "*";
 
-    console.log("requesting perm", url, matchPattern);
     const r = await browser.permissions.request({
         origins: [matchPattern, matchPatternNoPort],
     });
     if (r) {
-        browser.storage.local.set({"remote-url": remoteUrl});
-        console.log("Accepted");
+        await browser.storage.local.set({"remote-url": remoteUrl});
     } else {
-        console.log("Permission denied on url");
+        console.log("Permission denied on url TODO notify user");
     }
 }
 
