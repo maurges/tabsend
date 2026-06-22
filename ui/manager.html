@@ -109,6 +109,23 @@
         background-color: #ddd;
         opacity: 50%;
       }
+
+      #settings-button {
+        all: unset;
+        width: 50px; align-self: flex-end;
+        display: inline-flex; align-items: center; justify-content: center;
+        padding: 15px;
+        border-radius: 15px; border-color: #fff;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+        background: #fff;
+
+        &:hover {
+          background-color: #e6e6e6;
+        }
+        &:active {
+          background-color: #bbb;
+        }
+      }
     </style>
 
     <script src="./manager.js" defer=true></script>
@@ -172,7 +189,9 @@
 
     </div>
 
-    <button x-on:click="openOptions()" style="width: 100px; align-self: flex-end;">options</button>
+    <button x-on:click="openOptions()" id="settings-button">
+      <img src="../icons/preferences.svg">
+    </button>
 
   </body>
 </html>
