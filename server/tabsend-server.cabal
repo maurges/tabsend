@@ -39,10 +39,12 @@ executable app-exe
     , base
     , bytestring
     , containers
+    , hashable
     , http-types
     , servant
     , servant-server
     , text
+    , unordered-containers
     , wai
     , warp
   default-language: Haskell2010

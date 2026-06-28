@@ -19,10 +19,12 @@ executables:
     - aeson
     - bytestring
     - containers
+    - hashable
     - http-types
     - text
     - servant
     - servant-server
+    - unordered-containers
     - wai
     - warp
 
