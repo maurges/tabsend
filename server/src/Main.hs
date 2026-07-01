@@ -7,6 +7,7 @@
 
 module Main where
 
+import qualified Data.ByteString.Base64 as Base64
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.IORef
 import qualified Network.Wai.Handler.Warp as Warp
@@ -15,20 +16,22 @@ import qualified Servant.API as SApi
 import qualified Servant.Server as SServer
 import qualified Servant
 
+import Control.Concurrent.MVar (MVar, modifyMVar, newMVar, readMVar)
+import Control.Monad (forM)
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Data.Aeson (FromJSON, ToJSON)
 import Data.Data (Proxy (Proxy))
-import Data.Hashable (Hashable)
 import Data.Function ((&))
+import Data.Functor ((<&>))
 import Data.HashMap.Strict (HashMap)
+import Data.Hashable (Hashable)
 import Data.IORef (IORef, newIORef)
 import Data.Text (Text)
 import GHC.Generics (Generic)
 import Servant.API ((:>), (:<|>) ((:<|>)))
 import Servant.Server (Handler, err500)
-import Control.Concurrent.MVar (MVar, modifyMVar, newMVar, readMVar)
-import Data.Functor ((<&>))
-import Control.Monad (forM)
+import System.Random (getStdRandom, genByteString)
+import qualified Data.Base64.Types as Base64
 
 
 hashMapVals :: HashMap k v -> [v]
@@ -184,20 +187,29 @@ getState s token which =
 getToken :: StateVar -> TokenReq -> Handler AuthToken
 getToken s req = do
     liftIO $ putStrLn $ "token | " <> show req
-    let token = AuthToken "your-cool-token TODO"
+    -- TODO check creds
+
+    tokenBytes <- getStdRandom $ genByteString 32
+    let token = AuthToken . Base64.extractBase64 . Base64.encodeBase64 $ tokenBytes
 
     (peers, inFlights) <- liftIO $ modifyMVar s $ \state ->
         case HashMap.lookup req.username state.peers of
-            Just u -> pure (state, u)
+            Just u -> do
+                -- Associate this token to the user
+                let users = HashMap.insert token req.username state.users
+                pure (state {users}, u)
             Nothing -> do
+                -- Create completely new state vars for this user
                 tabs <- newIORef HashMap.empty
                 inFlight <- newIORef HashMap.empty
                 let u = (tabs, inFlight)
                 let peers = HashMap.insert req.username u state.peers
+                -- Also associate this token to the user
                 let users = HashMap.insert token req.username state.users
                 pure (state {users, peers}, u)
 
     -- Here we assume that tokens for one user never repeat, as they were generated with big entropy
+    -- Create new state vars for this token
     peerTabs <- liftIO $ newIORef []
     let peer = (req.peerName, peerTabs)
     pushed <- liftIO $ newIORef []

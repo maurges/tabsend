@@ -17,13 +17,15 @@ executables:
     dependencies:
     - base
     - aeson
+    - base64
     - bytestring
     - containers
     - hashable
     - http-types
-    - text
+    - random
     - servant
     - servant-server
+    - text
     - unordered-containers
     - wai
     - warp

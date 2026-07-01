@@ -37,10 +37,12 @@ executable app-exe
   build-depends:
       aeson
     , base
+    , base64
     , bytestring
     , containers
     , hashable
     , http-types
+    , random
     , servant
     , servant-server
     , text
