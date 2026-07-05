@@ -9,8 +9,10 @@ module Tabsend where
 
 import Prelude hiding (init)
 
+import qualified Data.Aeson as Aeson
 import qualified Data.Base64.Types as Base64
 import qualified Data.ByteString.Base64 as Base64
+import qualified Data.ByteString.Lazy as LazyByteString
 import qualified Data.HashMap.Strict as HashMap
 import qualified Data.IORef
 import qualified Database.LMDB as Lmdb
@@ -24,6 +26,7 @@ import Control.Concurrent.MVar (MVar, modifyMVar, newMVar, readMVar)
 import Control.Monad (forM)
 import Control.Monad.IO.Class (liftIO, MonadIO)
 import Data.Aeson (FromJSON, ToJSON)
+import Data.ByteString (ByteString)
 import Data.Data (Proxy (Proxy))
 import Data.Function ((&))
 import Data.Functor ((<&>))
@@ -31,14 +34,12 @@ import Data.HashMap.Strict (HashMap, (!))
 import Data.Hashable (Hashable)
 import Data.IORef (IORef, newIORef)
 import Data.Text (Text)
+import Data.Text.Encoding (encodeUtf8, decodeUtf8)
 import GHC.Generics (Generic)
 import Servant.API ((:>), (:<|>) ((:<|>)))
 import Servant.Server (Handler, err500)
+import System.Environment (getArgs)
 import System.Random (getStdRandom, genByteString)
-import Data.Text.Encoding (encodeUtf8, decodeUtf8)
-import Data.ByteString (ByteString)
-import qualified Data.Aeson as Aeson
-import qualified Data.ByteString.Lazy as LazyByteString
 
 
 hashMapVals :: HashMap k v -> [v]
@@ -435,11 +436,14 @@ app s db = SServer.serve api $ apiServer s db
 
 main :: IO ()
 main = do
+    dbDir <- getArgs >>= \case
+        [] -> pure "./database-dir"
+        ["--db", path] -> pure path
+        _other -> error "Usage: tabsend-server [--db PATH]"
     let settings = Warp.defaultSettings
             & Warp.setPort 31337
             & Warp.setHost "127.0.0.1"
     putStrLn "Server starting.."
-    -- TODO read dir from params or env
-    withAppDb "./database-dir" $ \state db -> do
+    withAppDb dbDir $ \state db -> do
         stateVar <- newMVar state
         Warp.runSettings settings $ app stateVar db
