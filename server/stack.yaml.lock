@@ -3,7 +3,14 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/topics/lock_files
 
-packages: []
+packages:
+- completed:
+    hackage: ppad-lmdb-0.1.0@sha256:2a8cf7bb06deb45e16158a3a1767b05bda0a4f419817473604fa31d9c7aebab8,2500
+    pantry-tree:
+      sha256: 7f4d08e6cfab03f76c2e3cee16d848a6413e2ad2faea732c2277d6a912caa3c5
+      size: 718
+  original:
+    hackage: ppad-lmdb-0.1.0
 snapshots:
 - completed:
     sha256: 3286bb954fe0e7e0291ca61fac01a689b7165da9d7e8ba3c3a045be989c860fd

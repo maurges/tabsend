@@ -11,9 +11,9 @@ BASE=http://localhost:31337
 
 jcurl() {
     if [ "$#" -eq 2 ]; then
-        curl "$BASE/$1" --header 'Content-Type: application/json' --data "$2" --fail-with-body
+        curl -s "$BASE/$1" --header 'Content-Type: application/json' --data "$2" --fail-with-body
     else
-        curl "$BASE/$1" --header 'Content-Type: application/json' --data "$2" --header "X-Tabsend-Auth: $3" --fail-with-body
+        curl -s "$BASE/$1" --header 'Content-Type: application/json' --data "$2" --header "X-Tabsend-Auth: $3" --fail-with-body
     fi
 }
 
@@ -22,8 +22,8 @@ die() {
     exit 1
 }
 
-TOKEN1="$(jcurl "token" '{"username": "u", "password": "p", "peerName": "peer1"}')"
-TOKEN2="$(jcurl "token" '{"username": "u", "password": "p", "peerName": "peer2"}')"
+TOKEN1="$(jcurl "token" '{"username": "admin", "password": "qwe", "peerName": "peer1"}')"
+TOKEN2="$(jcurl "token" '{"username": "admin", "password": "qwe", "peerName": "peer2"}')"
 
 # Send no tabs, see that noone yet pushed anything
 r="$(jcurl "update" '{"tabs": []}' "$TOKEN1")"
@@ -33,11 +33,11 @@ r="$(jcurl "update" '{"tabs": []}' "$TOKEN2")"
 
 # Send some tabs, see them in peer info
 jcurl "update" '{"tabs": [{"url": "url1", "identity": "id1", "title": "t1", "favicon": "f1"}]}' $TOKEN1
-r="$(curl "$BASE/get-peers" --header "X-Tabsend-Auth: $TOKEN1" --fail-with-body | jq -c '.peers | sort')"
+r="$(curl -s "$BASE/get-peers" --header "X-Tabsend-Auth: $TOKEN1" --fail-with-body | jq -c '.peers | sort')"
 [ "$r" == '[{"name":"peer1","tabs":[{"favicon":"f1","identity":"id1","title":"t1","url":"url1"}]},{"name":"peer2","tabs":[]}]' ] || die "Unexpected tabs from peer1: $r"
 
 jcurl "update" '{"tabs": [{"url": "url2", "identity": "id2", "title": "t2", "favicon": "f2"}]}' $TOKEN2
-r="$(curl "$BASE/get-peers" --header "X-Tabsend-Auth: $TOKEN1" --fail-with-body | jq -c '.peers | sort')"
+r="$(curl -s "$BASE/get-peers" --header "X-Tabsend-Auth: $TOKEN1" --fail-with-body | jq -c '.peers | sort')"
 [ "$r" == '[{"name":"peer1","tabs":[{"favicon":"f1","identity":"id1","title":"t1","url":"url1"}]},{"name":"peer2","tabs":[{"favicon":"f2","identity":"id2","title":"t2","url":"url2"}]}]' ] || die "Unexpected tabs from peer2: $r"
 
 # Push a tab
@@ -51,3 +51,5 @@ jcurl "acknowledge" '{"pushedTabs": ["id3"], "grabbedTabs": []}' "$TOKEN2"
 # Observe its absence in notification
 r="$(jcurl "update" '{"tabs": []}' "$TOKEN2")"
 [ "$r" == '{"grabbedTabs":[],"pushedTabs":[]}' ] || die "Bad update after ack: $r"
+
+echo -e "\nSUCCESS"
