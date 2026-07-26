@@ -42,6 +42,7 @@ library
     , base64
     , bytestring
     , containers
+    , directory
     , hashable
     , http-types
     , ppad-lmdb

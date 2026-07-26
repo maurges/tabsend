@@ -38,6 +38,7 @@ import Data.Text.Encoding (encodeUtf8, decodeUtf8)
 import GHC.Generics (Generic)
 import Servant.API ((:>), (:<|>) ((:<|>)))
 import Servant.Server (Handler, err500)
+import System.Directory (createDirectoryIfMissing)
 import System.Environment (getArgs)
 import System.Random (getStdRandom, genByteString)
 
@@ -440,6 +441,7 @@ main = do
         [] -> pure "./database-dir"
         ["--db", path] -> pure path
         _other -> error "Usage: tabsend-server [--db PATH]"
+    createDirectoryIfMissing True dbDir
     let settings = Warp.defaultSettings
             & Warp.setPort 31337
             & Warp.setHost "127.0.0.1"
