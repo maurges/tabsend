@@ -126,6 +126,19 @@
           background-color: #bbb;
         }
       }
+
+      #send-dropdown {
+        position: fixed;
+        background: white;
+        border: 1px solid #000;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+
+        > .send-dropdown-element {
+          padding: 8px 12px;
+          cursor: pointer;
+          border-bottom: 1px solid #eee;
+        }
+      }
     </style>
 
     <script src="./manager.js" defer=true></script>
@@ -147,6 +160,7 @@
                x-bind:class="tab.state === 'grayed' ? 'tab tab-grayed' : 'tab'"
                x-on:dragstart="onDragStart($event, tab, '__LOCAL')"
                x-on:dragend="onDragEnd()"
+               x-on:contextmenu="onContextMenu($event, '__LOCAL')"
           >
             <img x-show="tab.favicon !== null" x-bind:src="tab.favicon"></img>
             <span x-text="tab.title"></span>
@@ -192,6 +206,19 @@
     <button x-on:click="openOptions()" id="settings-button">
       <img src="../icons/preferences.svg">
     </button>
+
+    <div id="send-dropdown" x-data="sendDeviceModel"
+      x-show="shown"
+      x-bind:style="{top: posTop, left: posLeft}"
+    >
+      <template x-for="device in devices">
+        <div class="send-dropdown-element"
+          x-text="device.name"
+          x-on:click="onContextMenuSend($event, device.name)"
+        >
+        </div>
+      </template>
+    </div>
 
   </body>
 </html>

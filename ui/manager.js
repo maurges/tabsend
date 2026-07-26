@@ -267,6 +267,51 @@ let localTabModel = { tabs: [] };
 let remoteDeviceModel = { devices: [] };
 /** @type {{ hoverPanes: {[name: string]: boolean}, sourcePane: string | null, tabData: TabInfo | null }} */
 let dragModel = { hoverPanes: {}, sourcePane: null, tabData: null };
+/** @type {{ shown: boolean, devices: { name: string }[], posTop: string, posLeft: string }} */
+let sendDeviceModel = { shown: false, devices: [ {name: "__LOCAL"}, {name: "example"} ], posTop: "0px", posLeft: "0px" }
+
+// Hide the dropdown on many events
+document.addEventListener("click", () => {
+    // hide the dropdown on any click inside the document
+    sendDeviceModel.shown = false;
+});
+document.addEventListener('keydown', e => {
+    // hide the dropdown on escape
+    if (e.key === 'Escape') {
+        sendDeviceModel.shown = false;
+    }
+});
+window.addEventListener("scroll", () => {
+    // hide the dropdown on scroll
+    sendDeviceModel.shown = false;
+})
+
+/**
+ * @param {PointerEvent} ev
+ * @param {string} originName
+ */
+function onContextMenu(ev, originName) {
+    // second rightclick hides the context menu
+    if (sendDeviceModel.shown) {
+        sendDeviceModel.shown = false;
+        return;
+    }
+
+    ev.preventDefault();
+
+    // Position dropdown relative to the click
+    let top = ev.clientY;
+    let left = ev.clientX;
+    // TODO: prevent it going off screen somehow
+
+    sendDeviceModel.posTop = top.toString() + "px";
+    sendDeviceModel.posLeft = left.toString() + "px";
+    sendDeviceModel.shown = true;
+}
+
+function onContextMenuSend(ev, name) {
+    console.log("context menu send to", name)
+}
 
 /**
  * @param {browser.tabs.Tab[]=} mbQueried
@@ -319,14 +364,18 @@ document.addEventListener("alpine:init", () => {
     remoteDeviceModel = Alpine.reactive(remoteDeviceModel);
     Alpine.data("remoteDeviceModel", () => remoteDeviceModel);
     dragModel = Alpine.reactive(dragModel);
+    sendDeviceModel = Alpine.reactive(sendDeviceModel);
+    Alpine.data("sendDeviceModel", () => sendDeviceModel);
 
     Alpine.data("globalFunctions", () => ({
-        dragModel,
+        dragModel, // TODO should it be here?
         onDragStart,
         onDragEnd: () => {
             dragModel.sourcePane = null;
             dragModel.tabData = null;
         },
+        onContextMenu,
+        onContextMenuSend,
         shouldShowHover: (/** @type {string} */name) => {
             return dragModel.sourcePane !== name && dragModel.hoverPanes[name];
         },
