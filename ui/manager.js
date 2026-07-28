@@ -267,8 +267,16 @@ let localTabModel = { tabs: [] };
 let remoteDeviceModel = { devices: [] };
 /** @type {{ hoverPanes: {[name: string]: boolean}, sourcePane: string | null, tabData: TabInfo | null }} */
 let dragModel = { hoverPanes: {}, sourcePane: null, tabData: null };
-/** @type {{ shown: boolean, devices: { name: string }[], posTop: string, posLeft: string }} */
-let sendDeviceModel = { shown: false, devices: [ {name: "__LOCAL"}, {name: "example"} ], posTop: "0px", posLeft: "0px" }
+/** @type {{ shown: boolean, positioned: boolean, htmlElement: HTMLElement | null, devices: { name: string }[], posTop: string, posLeft: string }} */
+let sendDeviceModel = {
+    shown: false,
+    positioned: false,
+    devices: [ {name: "__LOCAL"}, {name: "example"} ],
+    posTop: "0px",
+    posLeft: "0px",
+    /// The dropdown element, initialized from html; used for position adjustment
+    htmlElement: null,
+}
 
 // Hide the dropdown on many events
 document.addEventListener("click", () => {
@@ -288,9 +296,9 @@ window.addEventListener("scroll", () => {
 
 /**
  * @param {PointerEvent} ev
- * @param {string} originName
+ * @param {string} _originName
  */
-function onContextMenu(ev, originName) {
+function onContextMenu(ev, _originName) {
     // second rightclick hides the context menu
     if (sendDeviceModel.shown) {
         sendDeviceModel.shown = false;
@@ -307,9 +315,30 @@ function onContextMenu(ev, originName) {
     sendDeviceModel.posTop = top.toString() + "px";
     sendDeviceModel.posLeft = left.toString() + "px";
     sendDeviceModel.shown = true;
+    // Adjust the position if the element doesn't fit in the bottom or right.
+    // Done on the next tick after being shown, which means the bounding box is
+    // already computed. The positioned value affects the css 'visibility' to
+    // prevent flickering
+    sendDeviceModel.positioned = false;
+    /** @type {{ nextTick: (cb: () => void) => void }} */
+    const Alpine = /** @type {any} */ (globalThis).Alpine;
+    Alpine.nextTick(() => {
+        const el = expect(sendDeviceModel.htmlElement, "Dropdown not initialized");
+        const rect = el.getBoundingClientRect();
+        console.log("adjusting", rect);
+        if (rect.right > window.innerWidth) {
+            sendDeviceModel.posLeft = Math.max(0, ev.clientX - rect.width) + "px";
+            console.log("adjust right")
+        }
+        if (rect.bottom > window.innerHeight) {
+            sendDeviceModel.posTop = Math.max(0, ev.clientY - rect.height) + "px";
+            console.log("adjust bottom")
+        }
+        sendDeviceModel.positioned = true;
+    });
 }
 
-function onContextMenuSend(ev, name) {
+function onContextMenuSend(_ev, name) {
     console.log("context menu send to", name)
 }
 

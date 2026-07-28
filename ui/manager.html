@@ -208,8 +208,9 @@
     </button>
 
     <div id="send-dropdown" x-data="sendDeviceModel"
+      x-init="htmlElement = $el"
       x-show="shown"
-      x-bind:style="{top: posTop, left: posLeft}"
+      x-bind:style="{top: posTop, left: posLeft, visibility: positioned ? 'visible' : 'hidden'}"
     >
       <template x-for="device in devices">
         <div class="send-dropdown-element"
