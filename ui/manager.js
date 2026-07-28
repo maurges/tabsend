@@ -224,40 +224,7 @@ async function onDrop(deviceName, ev) {
     const tabData = dragModel.tabData;
     const sourcePane = dragModel.sourcePane;
 
-    if (deviceName == "__LOCAL") {
-        // Create tab on this device
-        await browser.tabs.create({
-            active: false,
-            url: tabData.url,
-        });
-        await grabTabR(
-            {target: sourcePane, tabId: tabData.identity},
-        );
-    } else {
-        // Draw a grayed-out tab on remote device until it's received
-        tabData.state = "grayed";
-        const targetDevice = remoteDeviceModel.devices.find(d => d.name === deviceName);
-        if (targetDevice) {
-            targetDevice.tabs.push(tabData);
-        }
-
-        await pushTabR(
-            {target: deviceName, tab: tabData},
-        );
-        if (sourcePane == "__LOCAL") {
-            const tabId = parseInt(tabData.identity);
-            if (isNaN(tabId)) {
-                panic("Local tab id is invalid");
-            }
-            await browser.tabs.remove(tabId);
-        } else {
-            await grabTabR(
-                {target: sourcePane, tabId: tabData.identity},
-            );
-        }
-        // Enqueue populating remote tabs
-        populateRemoteTabs();
-    }
+    await transferTab(sourcePane, deviceName, tabData);
 }
 
 
@@ -278,10 +245,15 @@ let dragModel = {
     tabData: null
 };
 let sendDeviceModel = {
+    /** @type {{name: string, prettyName?: string }[]} */
+    devices: [ {name: "__LOCAL"}, {name: "example"} ],
+    /** @type {string | null} */
+    sourcePane: null,
+    /** @type {TabInfo | null} */
+    tabData: null,
+
     shown: false,
     positioned: false,
-    /** @type {{name: string}[]} */
-    devices: [ {name: "__LOCAL"}, {name: "example"} ],
     /** @type {string} */
     posTop: "0px",
     /** @type {string} */
@@ -306,10 +278,11 @@ window.addEventListener("scroll", () => {
 
 /**
  * @param {PointerEvent} ev
- * @param {string} _originName
+ * @param {TabInfo} tab
+ * @param {string} originName
  * @param {HTMLElement} elem - the context meny element
  */
-function onContextMenu(ev, _originName, elem) {
+function onContextMenu(ev, tab, originName, elem) {
     // second rightclick hides the context menu
     if (sendDeviceModel.shown) {
         sendDeviceModel.shown = false;
@@ -317,6 +290,16 @@ function onContextMenu(ev, _originName, elem) {
     }
 
     ev.preventDefault();
+
+    sendDeviceModel.sourcePane = originName;
+    sendDeviceModel.tabData = tab;
+
+    // Populate the device list with valid targets
+    sendDeviceModel.devices = [{name: "__LOCAL"}].concat(remoteDeviceModel.devices).filter(d => d.name != originName);
+    if (originName != "__LOCAL") {
+        // A presentable name for the local device. It's always at position 0
+        expect(sendDeviceModel.devices[0], "Local device missing somehow").prettyName = "This device";
+    }
 
     // Position dropdown relative to the click
     let top = ev.clientY;
@@ -345,8 +328,57 @@ function onContextMenu(ev, _originName, elem) {
     });
 }
 
-function onContextMenuSend(_ev, name) {
-    console.log("context menu send to", name)
+/**
+ * @param {string} deviceName
+ */
+async function onContextMenuSend(deviceName) {
+    console.log("context menu send to", deviceName)
+
+    const sourceDevice = expect(sendDeviceModel.sourcePane, "Invalid context menu state (pane)");
+    const tabData = expect(sendDeviceModel.tabData, "Invalid context menu state (tab)")
+    await transferTab(sourceDevice, deviceName, tabData);
+}
+
+/**
+ * @param {string} sourceDeviceName
+ * @param {string} targetDeviceName
+ * @param {TabInfo} tabData
+ */
+async function transferTab(sourceDeviceName, targetDeviceName, tabData) {
+    if (targetDeviceName == "__LOCAL") {
+        // Create tab on this device
+        await browser.tabs.create({
+            active: false,
+            url: tabData.url,
+        });
+        await grabTabR(
+            {target: sourceDeviceName, tabId: tabData.identity},
+        );
+    } else {
+        // Draw a grayed-out tab on remote device until it's received
+        tabData.state = "grayed";
+        const targetDevice = remoteDeviceModel.devices.find(d => d.name === targetDeviceName);
+        if (targetDevice) {
+            targetDevice.tabs.push(tabData);
+        }
+
+        await pushTabR(
+            {target: targetDeviceName, tab: tabData},
+        );
+        if (sourceDeviceName == "__LOCAL") {
+            const tabId = parseInt(tabData.identity);
+            if (isNaN(tabId)) {
+                panic("Local tab id is invalid");
+            }
+            await browser.tabs.remove(tabId);
+        } else {
+            await grabTabR(
+                {target: sourceDeviceName, tabId: tabData.identity},
+            );
+        }
+        // Enqueue populating remote tabs
+        populateRemoteTabs();
+    }
 }
 
 /**
