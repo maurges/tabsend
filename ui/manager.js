@@ -214,7 +214,7 @@ async function onDrop(deviceName, ev) {
     // TODO: This fires on drops of anything, not just the tab, and some things we could accept
 
     if (dragModel.sourcePane !== deviceName && dragModel.tabData !== null && dragModel.sourcePane !== null) {
-        console.log("Accepting drop to", deviceName, dragModel.tabData);
+        // Drag in progress by us, drop to a pane that is not the source
     } else {
         return;
     }
@@ -261,21 +261,31 @@ async function onDrop(deviceName, ev) {
 }
 
 
-/** @type {{ tabs: TabInfo[] }} */
-let localTabModel = { tabs: [] };
-/** @type {{ devices: { name: string, tabs: TabInfo[] }[] }} */
-let remoteDeviceModel = { devices: [] };
-/** @type {{ hoverPanes: {[name: string]: boolean}, sourcePane: string | null, tabData: TabInfo | null }} */
-let dragModel = { hoverPanes: {}, sourcePane: null, tabData: null };
-/** @type {{ shown: boolean, positioned: boolean, htmlElement: HTMLElement | null, devices: { name: string }[], posTop: string, posLeft: string }} */
+let localTabModel = {
+    /** @type {TabInfo[]} */
+    tabs: []
+};
+let remoteDeviceModel = {
+    /** @type {{ name: string, tabs: TabInfo[] }[]} */
+    devices: []
+};
+let dragModel = {
+    /** @type {Record<string, boolean>} */
+    hoverPanes: {},
+    /** @type {string | null} */
+    sourcePane: null,
+    /** @type {TabInfo | null} */
+    tabData: null
+};
 let sendDeviceModel = {
     shown: false,
     positioned: false,
+    /** @type {{name: string}[]} */
     devices: [ {name: "__LOCAL"}, {name: "example"} ],
+    /** @type {string} */
     posTop: "0px",
+    /** @type {string} */
     posLeft: "0px",
-    /// The dropdown element, initialized from html; used for position adjustment
-    htmlElement: null,
 }
 
 // Hide the dropdown on many events
@@ -297,8 +307,9 @@ window.addEventListener("scroll", () => {
 /**
  * @param {PointerEvent} ev
  * @param {string} _originName
+ * @param {HTMLElement} elem - the context meny element
  */
-function onContextMenu(ev, _originName) {
+function onContextMenu(ev, _originName, elem) {
     // second rightclick hides the context menu
     if (sendDeviceModel.shown) {
         sendDeviceModel.shown = false;
@@ -323,16 +334,12 @@ function onContextMenu(ev, _originName) {
     /** @type {{ nextTick: (cb: () => void) => void }} */
     const Alpine = /** @type {any} */ (globalThis).Alpine;
     Alpine.nextTick(() => {
-        const el = expect(sendDeviceModel.htmlElement, "Dropdown not initialized");
-        const rect = el.getBoundingClientRect();
-        console.log("adjusting", rect);
+        const rect = elem.getBoundingClientRect();
         if (rect.right > window.innerWidth) {
             sendDeviceModel.posLeft = Math.max(0, ev.clientX - rect.width) + "px";
-            console.log("adjust right")
         }
         if (rect.bottom > window.innerHeight) {
             sendDeviceModel.posTop = Math.max(0, ev.clientY - rect.height) + "px";
-            console.log("adjust bottom")
         }
         sendDeviceModel.positioned = true;
     });
@@ -389,15 +396,16 @@ document.addEventListener("alpine:init", () => {
     const Alpine = /** @type {any} */ (globalThis).Alpine;
 
     localTabModel = Alpine.reactive(localTabModel);
-    Alpine.data("localTabModel", () => localTabModel);
     remoteDeviceModel = Alpine.reactive(remoteDeviceModel);
-    Alpine.data("remoteDeviceModel", () => remoteDeviceModel);
     dragModel = Alpine.reactive(dragModel);
     sendDeviceModel = Alpine.reactive(sendDeviceModel);
-    Alpine.data("sendDeviceModel", () => sendDeviceModel);
 
-    Alpine.data("globalFunctions", () => ({
-        dragModel, // TODO should it be here?
+    Alpine.data("app", () => ({
+        localTabModel,
+        remoteDeviceModel,
+        dragModel,
+        sendDeviceModel,
+
         onDragStart,
         onDragEnd: () => {
             dragModel.sourcePane = null;

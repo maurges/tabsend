@@ -144,23 +144,22 @@
     <script src="./manager.js" defer=true></script>
     <script src="./alpine.js" defer=true></script>
   </head>
-  <body x-data="globalFunctions" class="global-column" style="background-color: #fff">
+  <body x-data="app" class="global-column" style="background-color: #fff">
 
     <div class="global-row">
 
       <div class="tab-column"
-           x-data="localTabModel"
            x-on:dragover="onDragOver('__LOCAL', $event)"
            x-on:dragleave="onDragLeave('__LOCAL', $event, $el)"
            x-on:drop="onDrop('__LOCAL', $event)"
       >
         <div class="device-title"> Local </div>
-        <template x-for="tab in tabs">
+        <template x-for="tab in localTabModel.tabs">
           <div draggable=true
                x-bind:class="tab.state === 'grayed' ? 'tab tab-grayed' : 'tab'"
                x-on:dragstart="onDragStart($event, tab, '__LOCAL')"
                x-on:dragend="onDragEnd()"
-               x-on:contextmenu="onContextMenu($event, '__LOCAL')"
+               x-on:contextmenu="onContextMenu($event, '__LOCAL', $refs.sendDropdown)"
           >
             <img x-show="tab.favicon !== null" x-bind:src="tab.favicon"></img>
             <span x-text="tab.title"></span>
@@ -173,8 +172,8 @@
         <div class="tab placeholder" x-show="shouldShowHover('__LOCAL')">Send here</div> <!-- placeholder for drag -->
       </div>
 
-      <div class="device-column" x-data="remoteDeviceModel">
-        <template x-for="device in devices">
+      <div class="device-column">
+        <template x-for="device in remoteDeviceModel.devices">
           <div class="tab-column"
                x-on:dragover="onDragOver(device.name, $event)"
                x-on:dragleave="onDragLeave(device.name, $event, $el)"
@@ -186,6 +185,7 @@
                    x-bind:class="tab.state === 'grayed' ? 'tab tab-grayed' : 'tab'"
                    x-on:dragstart="onDragStart($event, tab, device.name)"
                    x-on:dragend="onDragEnd()"
+                   x-on:contextmenu="onContextMenu($event, device.name, $refs.sendDropdown)"
               >
                 <img x-show="tab.favicon !== null" x-bind:src="tab.favicon"></img>
                 <span x-text="tab.title"></span>
@@ -207,12 +207,16 @@
       <img src="../icons/preferences.svg">
     </button>
 
-    <div id="send-dropdown" x-data="sendDeviceModel"
-      x-init="htmlElement = $el"
-      x-show="shown"
-      x-bind:style="{top: posTop, left: posLeft, visibility: positioned ? 'visible' : 'hidden'}"
+    <div id="send-dropdown"
+      x-ref="sendDropdown"
+      x-show="sendDeviceModel.shown"
+      x-bind:style="{
+                      top: sendDeviceModel.posTop,
+                      left: sendDeviceModel.posLeft,
+                      visibility: sendDeviceModel.positioned ? 'visible' : 'hidden',
+                    }"
     >
-      <template x-for="device in devices">
+      <template x-for="device in sendDeviceModel.devices">
         <div class="send-dropdown-element"
           x-text="device.name"
           x-on:click="onContextMenuSend($event, device.name)"
