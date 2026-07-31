@@ -1,10 +1,5 @@
 /// <reference path="../types/webext.d.ts" />
 
-// Need to allow requests to the server domain.
-// We can request at runtime the specific domain with something like this:
-// https://stackoverflow.com/questions/71913706/is-it-possible-for-a-webextension-addon-to-request-permission-for-a-specific-web
-
-
 /**
  * @param {string} s
  * @returns {never}
