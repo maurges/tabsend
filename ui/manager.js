@@ -210,7 +210,6 @@ let sendDeviceModel = {
     /** @type {TabInfo | null} */
     tabData: null,
 
-    shown: false,
     positioned: false,
     /** @type {string} */
     posTop: "0px",
@@ -282,33 +281,16 @@ async function onDrop(deviceName, ev) {
     await transferTab(sourcePane, deviceName, tabData);
 }
 
-
-// Hide the dropdown on many events
-document.addEventListener("click", () => {
-    // hide the dropdown on any click inside the document
-    sendDeviceModel.shown = false;
-});
-document.addEventListener('keydown', e => {
-    // hide the dropdown on escape
-    if (e.key === 'Escape') {
-        sendDeviceModel.shown = false;
-    }
-});
-window.addEventListener("scroll", () => {
-    // hide the dropdown on scroll
-    sendDeviceModel.shown = false;
-})
-
 /**
  * @param {PointerEvent} ev
  * @param {TabInfo} tab
  * @param {string} originName
  * @param {HTMLElement} elem - the context meny element
+ * @param {"right" | "left"} mouse - the button this was pressed with, for mobile support
  */
-function onContextMenu(ev, tab, originName, elem) {
-    // second rightclick hides the context menu
-    if (sendDeviceModel.shown) {
-        sendDeviceModel.shown = false;
+function onContextMenu(ev, tab, originName, elem, mouse) {
+    // Right click is allowed on all, left click only on touch input
+    if (mouse === "left" && ev.pointerType !== "touch") {
         return;
     }
 
@@ -331,7 +313,7 @@ function onContextMenu(ev, tab, originName, elem) {
 
     sendDeviceModel.posTop = top + "px";
     sendDeviceModel.posLeft = left + "px";
-    sendDeviceModel.shown = true;
+    elem.showPopover();
     // Adjust the position if the element doesn't fit in the bottom or right.
     // Done on the next tick after being shown, which means the bounding box is
     // already computed. The positioned value affects the css 'visibility' to
@@ -355,8 +337,6 @@ function onContextMenu(ev, tab, originName, elem) {
  * @param {string} deviceName
  */
 async function onContextMenuSend(deviceName) {
-    console.log("context menu send to", deviceName)
-
     const sourceDevice = expect(sendDeviceModel.sourcePane, "Invalid context menu state (pane)");
     const tabData = expect(sendDeviceModel.tabData, "Invalid context menu state (tab)")
     await transferTab(sourceDevice, deviceName, tabData);

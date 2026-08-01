@@ -160,6 +160,13 @@
 
       #send-dropdown {
         position: fixed;
+
+        /* Fucking popover defaults */
+        inset: auto;
+        margin: 0;
+        border: 0;
+        padding: 0;
+
         background: #fff;
         /* border: 1px solid #999; */
         border-radius: 15px;
@@ -204,13 +211,14 @@
                x-bind:class="{ 'tab-grayed': tab.state === 'grayed' }"
                x-on:dragstart="onDragStart($event, tab, '__LOCAL')"
                x-on:dragend="onDragEnd()"
-               x-on:contextmenu="onContextMenu($event, tab, '__LOCAL', $refs.sendDropdown)"
+               x-on:click="onContextMenu($event, tab, '__LOCAL', $refs.sendDropdown, 'left')"
+               x-on:contextmenu="onContextMenu($event, tab, '__LOCAL', $refs.sendDropdown, 'right')"
           >
             <img x-show="tab.favicon !== null" x-bind:src="tab.favicon" alt="">
             <span x-text="tab.title"></span>
             <svg viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg"
               aria-label="Close tab" role="button"
-              x-on:click="onClose(tab, '__LOCAL')"
+              x-on:click.stop="onClose(tab, '__LOCAL')"
             >
               <line x1="7.5" y1="7.5" x2="14.5" y2="14.5" stroke="#555" stroke-width="2" stroke-linecap="round" />
               <line x1="14.5" y1="7.5" x2="7.5" y2="14.5" stroke="#555" stroke-width="2" stroke-linecap="round" />
@@ -234,13 +242,14 @@
                    x-bind:class="{ 'tab-grayed': tab.state === 'grayed' }"
                    x-on:dragstart="onDragStart($event, tab, device.name)"
                    x-on:dragend="onDragEnd()"
-                   x-on:contextmenu="onContextMenu($event, tab, device.name, $refs.sendDropdown)"
+                   x-on:click="onContextMenu($event, tab, device.name, $refs.sendDropdown, 'left')"
+                   x-on:contextmenu="onContextMenu($event, tab, device.name, $refs.sendDropdown, 'right')"
               >
                 <img x-show="tab.favicon !== null" x-bind:src="tab.favicon" alt="">
                 <span x-text="tab.title"></span>
                 <svg viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg"
                   aria-label="Close tab" role="button"
-                  x-on:click="onClose(tab, device.name)"
+                  x-on:click.stop="onClose(tab, device.name)"
                 >
                   <line x1="7.5" y1="7.5" x2="14.5" y2="14.5" stroke="#555" stroke-width="2" stroke-linecap="round" />
                   <line x1="14.5" y1="7.5" x2="7.5" y2="14.5" stroke="#555" stroke-width="2" stroke-linecap="round" />
@@ -260,13 +269,14 @@
     </button>
 
     <div id="send-dropdown"
+      popover="auto"
       x-ref="sendDropdown"
-      x-show="sendDeviceModel.shown"
       x-bind:style="{
                       top: sendDeviceModel.posTop,
                       left: sendDeviceModel.posLeft,
                       visibility: sendDeviceModel.positioned ? 'visible' : 'hidden',
                     }"
+      x-on:click="$el.hidePopover()"
     >
       <div class="send-dropdown-element"
         x-on:click="onClose(sendDeviceModel.tabData, sendDeviceModel.sourcePane)"
