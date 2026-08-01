@@ -306,8 +306,8 @@ function onContextMenu(ev, tab, originName, elem) {
     let left = ev.clientX;
     // TODO: prevent it going off screen somehow
 
-    sendDeviceModel.posTop = top.toString() + "px";
-    sendDeviceModel.posLeft = left.toString() + "px";
+    sendDeviceModel.posTop = top + "px";
+    sendDeviceModel.posLeft = left + "px";
     sendDeviceModel.shown = true;
     // Adjust the position if the element doesn't fit in the bottom or right.
     // Done on the next tick after being shown, which means the bounding box is
