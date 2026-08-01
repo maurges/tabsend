@@ -28,6 +28,9 @@
         justify-content: center;
         align-items: center;
         gap: var(--pane-gap);
+        @media (max-width: 750px) { /* calc(var(--pane-width) * 2 + var(--pane-gap)) */
+          max-width: var(--pane-width);
+        }
       }
 
       .global-row {
@@ -44,6 +47,7 @@
       }
 
       .device-column {
+        /* I can't only use max-width here because the empty column would have 0 width instead of requested */
         width: var(--pane-width);
         max-width: 100%;
         display: flex;
@@ -57,7 +61,9 @@
         --favicon-size: 18px;
         --tab-gap: 5px;
 
-        max-width: var(--pane-width);
+        /* I can't only use max-width here because sometimes it renders smaller. Some bug? */
+        width: var(--pane-width);
+        max-width: 100%;
         background-color: #fff;
         border-radius: 15px;
         box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
