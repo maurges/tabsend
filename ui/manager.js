@@ -186,6 +186,61 @@ async function grabTabR(req) {
 /***********************/
 
 
+let localTabModel = {
+    /** @type {TabInfo[]} */
+    tabs: []
+};
+let remoteDeviceModel = {
+    /** @type {{ name: string, tabs: TabInfo[] }[]} */
+    devices: []
+};
+let dragModel = {
+    /** @type {Record<string, boolean>} */
+    hoverPanes: {},
+    /** @type {string | null} */
+    sourcePane: null,
+    /** @type {TabInfo | null} */
+    tabData: null
+};
+let sendDeviceModel = {
+    /** @type {{name: string, prettyName?: string }[]} */
+    devices: [],
+    /** @type {string | null} */
+    sourcePane: null,
+    /** @type {TabInfo | null} */
+    tabData: null,
+
+    shown: false,
+    positioned: false,
+    /** @type {string} */
+    posTop: "0px",
+    /** @type {string} */
+    posLeft: "0px",
+}
+
+
+/***********************/
+/****** UI actions ******/
+/***********************/
+
+/**
+ * @param {TabInfo} tab
+ * @param {string} deviceName
+ */
+async function onClose(tab, deviceName) {
+    if (deviceName === "__LOCAL") {
+        const tabId = parseInt(tab.identity);
+        if (isNaN(tabId)) {
+            panic("Local tab id is invalid");
+        }
+        browser.tabs.remove(tabId);
+    } else {
+        await grabTabR(
+            {target: deviceName, tabId: tab.identity},
+        );
+    }
+}
+
 /**
  * @param {DragEvent} e
  * @param {TabInfo} tab
@@ -227,38 +282,6 @@ async function onDrop(deviceName, ev) {
     await transferTab(sourcePane, deviceName, tabData);
 }
 
-
-let localTabModel = {
-    /** @type {TabInfo[]} */
-    tabs: []
-};
-let remoteDeviceModel = {
-    /** @type {{ name: string, tabs: TabInfo[] }[]} */
-    devices: []
-};
-let dragModel = {
-    /** @type {Record<string, boolean>} */
-    hoverPanes: {},
-    /** @type {string | null} */
-    sourcePane: null,
-    /** @type {TabInfo | null} */
-    tabData: null
-};
-let sendDeviceModel = {
-    /** @type {{name: string, prettyName?: string }[]} */
-    devices: [ {name: "__LOCAL"}, {name: "example"} ],
-    /** @type {string | null} */
-    sourcePane: null,
-    /** @type {TabInfo | null} */
-    tabData: null,
-
-    shown: false,
-    positioned: false,
-    /** @type {string} */
-    posTop: "0px",
-    /** @type {string} */
-    posLeft: "0px",
-}
 
 // Hide the dropdown on many events
 document.addEventListener("click", () => {
@@ -438,6 +461,7 @@ document.addEventListener("alpine:init", () => {
         dragModel,
         sendDeviceModel,
 
+        onClose,
         onDragStart,
         onDragEnd: () => {
             dragModel.sourcePane = null;
