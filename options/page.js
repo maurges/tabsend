@@ -40,6 +40,12 @@ function debounce(func, delay) {
 }
 
 
+let urlModel = {
+    isSet: false,
+    didFail: false,
+};
+
+
 async function urlChanged() {
     let input = inputUrl.value;
     if (!input.startsWith("http")) {
@@ -83,14 +89,26 @@ function tokenChanged(ev) {
 const inputUrl = byId("input-url");
 /** @type {HTMLInputElement} */
 const inputToken = byId("input-token");
-/** @type {HTMLButtonElement} */
-const buttonUrl = byId("button-url");
 
-buttonUrl.addEventListener("click", urlChanged)
 inputToken.addEventListener("input", debounce(tokenChanged, 1000));
 
 // populate the two fields initially
 browser.storage.local.get(["remote-url", "access-token"]).then(async r => {
     inputUrl.value = r["remote-url"] || "";
     inputToken.value = r["access-token"] || "";
+});
+
+document.addEventListener("alpine:init", () => {
+    // Define Alpine types that we use for typescript checking
+    /** @type {{ reactive: <T>(v: T) => T, data: <T>(name: string, fn: () => T) => void }} */
+    const Alpine = /** @type {any} */ (globalThis).Alpine;
+
+    urlModel = Alpine.reactive(urlModel);
+
+    Alpine.data("app", () => ({
+        urlModel,
+
+        urlChanged,
+        tokenChanged: debounce(tokenChanged, 1000),
+    }));
 });

@@ -463,6 +463,9 @@ async function transferTab(sourceDeviceName, targetDeviceName, tabData) {
             }
             await browser.tabs.remove(tabId);
         } else {
+            // Draw it grayed-out on remote source until it's acknowledged
+            tabData.inFlight = true;
+
             await grabTabR(
                 {target: sourceDeviceName, tabId: tabData.identity},
             );
@@ -544,13 +547,19 @@ async function notifyLocalTabs() {
         const tabId = parseInt(tab.tabId);
         if (!(tab.tabId in recentlyAcked)) {
             if (!isNaN(tabId)) {
-                await browser.tabs.remove(tabId);
+                try {
+                    await browser.tabs.remove(tabId);
+                } catch (e) {
+                    console.log("Error removing tab", e);
+                }
             }
         }
         grabbedTabs.push(tab.tabId);
         recentlyAcked[tab.tabId] = now;
     }
-    await acknowledgeR({pushedTabs, grabbedTabs});
+    if (pushedTabs.length !== 0 || grabbedTabs.length !== 0) {
+        await acknowledgeR({pushedTabs, grabbedTabs});
+    }
 }
 
 document.addEventListener("alpine:init", () => {

@@ -5,10 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title> Tabsend options </title>
 
-    <script src="./page.js" defer=true></script>
-
     <style>
-      * {
+      *, *::before, *::after {
+        box-sizing: border-box;
+      }
+
+      body {
         font-family: Arial, sans-serif;
       }
       form {
@@ -29,18 +31,21 @@
         }
       }
     </style>
+
+    <script src="./page.js" defer=true></script>
+    <script src="../lib/alpine.js" defer=true></script>
   </head>
-  <body>
+  <body x-data="app">
     <form action="">
       <div>
         <label for="url"> Server URL </label>
         <input type="text" name="url" id="input-url"></input>
-        <button id="button-url" type="button">set</button>
+        <button id="button-url" type="button" x-on:click="urlChanged()">set</button>
       </div>
 
       <div>
         <label for="token"> Access token </label>
-        <input type="text" name="token" id="input-token"></input>
+        <input type="text" name="token" id="input-token" x-on:input="tokenChanged"></input>
       </div>
     </form>
   </body>
