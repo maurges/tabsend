@@ -514,8 +514,43 @@ async function populateRemoteTabs() {
     remoteDeviceModel.devices = resp.peers;
 }
 
+/** @type { Record<string, number> } */
+let recentlyAcked = {};
 async function notifyLocalTabs() {
-    await notifyR(localTabModel);
+    const updates = await notifyR(localTabModel);
+
+    // Acked tabs are remembered for a minute for idempotency
+    const now = Date.now();
+    // Filter a dict, yeah it looks like this
+    recentlyAcked = Object.fromEntries(
+        Object.entries(recentlyAcked)
+            .filter(([_id, time]) => now - time < 60_000)
+    );
+
+    let pushedTabs = [];
+    let grabbedTabs = [];
+    for (const tab of updates.pushedTabs) {
+        if (!(tab.tabId in recentlyAcked)) {
+            await browser.tabs.create({
+                active: false,
+                url: tab.url,
+            });
+        }
+        pushedTabs.push(tab.tabId);
+        recentlyAcked[tab.tabId] = now;
+    }
+    for (const tab of updates.grabbedTabs) {
+        // TODO buffer of acked
+        const tabId = parseInt(tab.tabId);
+        if (!(tab.tabId in recentlyAcked)) {
+            if (!isNaN(tabId)) {
+                await browser.tabs.remove(tabId);
+            }
+        }
+        grabbedTabs.push(tab.tabId);
+        recentlyAcked[tab.tabId] = now;
+    }
+    await acknowledgeR({pushedTabs, grabbedTabs});
 }
 
 document.addEventListener("alpine:init", () => {
@@ -581,5 +616,6 @@ browser.tabs.onRemoved.addListener(async () => {
 
 populateRemoteTabs();
 setInterval(populateRemoteTabs, 5000);
+// TODO these should be in the background script
 notifyLocalTabs();
 setInterval(notifyLocalTabs, 5000);

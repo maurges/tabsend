@@ -380,8 +380,11 @@ getPeers :: StateVar -> AuthToken -> Handler PeersResp
 getPeers s token = do
     liftIO . putStrLn $ "getPeers"
     peerMap <- readIORef =<< getState s token fst
-    -- TODO: Everyone but requester
-    peers <- forM (HashMap.toList peerMap) $ \(name, tabRef) -> do
+    peerName <- liftIO (readMVar s) <&> (.users) <&> HashMap.lookup token >>= \case
+        Nothing -> Servant.throwError err500 -- Incoherent state
+        Just (_username, peerName) -> pure peerName
+    let otherPeers = filter ((/=) peerName . fst) . HashMap.toList $ peerMap
+    peers <- forM otherPeers $ \(name, tabRef) -> do
         tabs <- readIORef tabRef
         pure $ PeerInfo { name, tabs }
 
