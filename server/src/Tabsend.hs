@@ -124,7 +124,7 @@ data PushTabReq = PushTabReq
 
 data GrabTabReq = GrabTabReq
     { target :: !PeerName
-    , tab :: !TabInfo
+    , tabId :: !Text
     }
     deriving (Eq, Show, Generic)
     deriving anyclass (FromJSON, ToJSON)
@@ -409,7 +409,7 @@ pushTab s db token req = do
 grabTab :: StateVar -> Db -> AuthToken -> GrabTabReq -> Handler Text
 grabTab s db token req = do
     liftIO . putStrLn $ "grabTab | " <> show req
-    let grabbed = GrabbedTab { tabId = req.tab.identity }
+    let grabbed = GrabbedTab { tabId = req.tabId }
     (_pushed, grabbedRef) <-
         getState s token snd
         >>= readIORef
