@@ -193,7 +193,7 @@
     </style>
 
     <script src="./manager.js" defer=true></script>
-    <script src="./alpine.js" defer=true></script>
+    <script src="../lib/alpine.js" defer=true></script>
   </head>
   <body x-data="app" class="global-column">
 
@@ -208,7 +208,7 @@
         <template x-for="tab in localTabModel.tabs">
           <div draggable="true"
                class="tab"
-               x-bind:class="{ 'tab-grayed': tab.state === 'grayed' }"
+               x-bind:class="{ 'tab-grayed': tab.inFlight }"
                x-on:dragstart="onDragStart($event, tab, '__LOCAL')"
                x-on:dragend="onDragEnd()"
                x-on:click="onContextMenu($event, tab, '__LOCAL', $refs.sendDropdown, 'left')"
@@ -239,7 +239,7 @@
             <template x-for="tab in device.tabs">
               <div draggable="true"
                    class="tab"
-                   x-bind:class="{ 'tab-grayed': tab.state === 'grayed' }"
+                   x-bind:class="{ 'tab-grayed': tab.inFlight }"
                    x-on:dragstart="onDragStart($event, tab, device.name)"
                    x-on:dragend="onDragEnd()"
                    x-on:click="onContextMenu($event, tab, device.name, $refs.sendDropdown, 'left')"

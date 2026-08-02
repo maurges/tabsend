@@ -53,8 +53,19 @@ async function sleep(/** @type {number} */time) {
  *      identity: string,
  *      title: string,
  *      favicon: string | null,
- *      state?: "grayed",
+ *      inFlight: boolean,
  *  }} TabInfo
+ */
+
+/** @typedef {{
+ *      url: string,
+ *      tabId: string,
+ *  }} PushedTab
+ */
+
+/** @typedef {{
+ *      tabId: string,
+ *  }} GrabbedTab
  */
 
 /** @typedef {{
@@ -78,6 +89,23 @@ async function sleep(/** @type {number} */time) {
  *      target: string,
  *      tabId: string,
  *  }} GrabTabReq
+ */
+
+/** @typedef {{
+ *      tabs: TabInfo[],
+ *  }} NotifyTabsReq
+ */
+
+/** @typedef {{
+ *      pushedTabs: PushedTab[],
+ *      grabbedTabs: GrabbedTab[],
+ *  }} NotifyTabsResp
+ */
+
+/** @typedef {{
+ *      pushedTabs: string[],
+ *      grabbedTabs: string[],
+ *  }} AckReq
  */
 
 
@@ -128,7 +156,10 @@ async function getTokenR(req) {
             "Content-Type": "application/json",
         },
     });
-    return r.text();
+    if (!r.ok) {
+        throw new Error("/token failed: " + await r.text());
+    }
+    return await r.text();
 }
 
 /**
@@ -142,8 +173,32 @@ async function getPeersR() {
             "X-Tabsend-Auth": expect(accessToken, "token not yet set"),
         },
     });
+    if (!r.ok) {
+        throw new Error("/get-peers failed: " + await r.text());
+    }
     // TODO: parse json
-    return r.json();
+    return await r.json();
+}
+
+/**
+ * @param {NotifyTabsReq} req
+ * @returns {Promise<NotifyTabsResp>}
+ */
+async function notifyR(req) {
+    const url = expect(baseUrl, "base url not yet set") + "update";
+    const r = await fetch(url, {
+        method: "POST",
+        body: JSON.stringify(req),
+        headers: {
+            "Content-Type": "application/json",
+            "X-Tabsend-Auth": expect(accessToken, "token not yet set"),
+        },
+    });
+    if (!r.ok) {
+        throw new Error("/update failed: " + await r.text());
+    }
+    // TODO parse json
+    return await r.json();
 }
 
 /**
@@ -160,7 +215,10 @@ async function pushTabR(req) {
             "X-Tabsend-Auth": expect(accessToken, "token not yet set"),
         },
     });
-    return r.text();
+    if (!r.ok) {
+        throw new Error("/push-tab failed: " + await r.text());
+    }
+    return await r.text();
 }
 
 /**
@@ -177,7 +235,30 @@ async function grabTabR(req) {
             "X-Tabsend-Auth": expect(accessToken, "token not yet set"),
         },
     });
-    return r.text();
+    if (!r.ok) {
+        throw new Error("/grab-tab failed: " + await r.text());
+    }
+    return await r.text();
+}
+
+/**
+ * @param {AckReq} req
+ * @returns {Promise<string>}
+ */
+async function acknowledgeR(req) {
+    const url = expect(baseUrl, "base url not yet set") + "acknowledge";
+    const r = await fetch(url, {
+        method: "POST",
+        body: JSON.stringify(req),
+        headers: {
+            "Content-Type": "application/json",
+            "X-Tabsend-Auth": expect(accessToken, "token not yet set"),
+        },
+    });
+    if (!r.ok) {
+        throw new Error("/acknowledge failed: " + await r.text());
+    }
+    return await r.text();
 }
 
 
@@ -359,10 +440,17 @@ async function transferTab(sourceDeviceName, targetDeviceName, tabData) {
         );
     } else {
         // Draw a grayed-out tab on remote device until it's received
-        tabData.state = "grayed";
         const targetDevice = remoteDeviceModel.devices.find(d => d.name === targetDeviceName);
         if (targetDevice) {
-            targetDevice.tabs.push(tabData);
+            // Clone fucking doesn't work
+            const tab = {
+                url: tabData.url,
+                identity: tabData.identity,
+                title: tabData.title,
+                favicon: tabData.favicon,
+                inFlight: true,
+            }
+            targetDevice.tabs.push(tab);
         }
 
         await pushTabR(
@@ -396,6 +484,7 @@ async function populateLocalTabs(mbQueried) {
             url: expect(tab.url, "no permissions for url"),
             favicon: tab.favIconUrl || null,
             identity: expect(tab.id, "no permission for id").toString(),
+            inFlight: false,
         });
     }
     localTabModel.tabs = tabModel;
@@ -423,6 +512,10 @@ async function populateRemoteTabs() {
 
     const resp = await getPeersR();
     remoteDeviceModel.devices = resp.peers;
+}
+
+async function notifyLocalTabs() {
+    await notifyR(localTabModel);
 }
 
 document.addEventListener("alpine:init", () => {
@@ -486,5 +579,7 @@ browser.tabs.onRemoved.addListener(async () => {
     }
 });
 
-// populateRemoteTabs();
-// setInterval(populateRemoteTabs, 5000);
+populateRemoteTabs();
+setInterval(populateRemoteTabs, 5000);
+notifyLocalTabs();
+setInterval(notifyLocalTabs, 5000);
