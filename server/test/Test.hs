@@ -8,6 +8,8 @@ import Path (fromAbsDir)
 import Test.Syd (describe, it, sydTest, shouldBe)
 import Test.Syd.Path (tempDirSpec)
 import Data.IORef (readIORef)
+import System.Exit (ExitCode(ExitFailure))
+import Control.Exception (throwIO, try)
 
 main = sydTest $ do
     describe "database" $ tempDirSpec "tabsend-db" $ do
@@ -41,6 +43,38 @@ main = sydTest $ do
                 tabs2' <- readIORef $ user1 ! d2
                 tabs1' `shouldBe` tabs1
                 tabs2' `shouldBe` tabs2
+
+        it "saves one grab" $ \tempDir' -> do
+            let tempDir = fromAbsDir tempDir'
+            let t1 = Tabsend.AuthToken "token1"
+            let d1 = Tabsend.PeerName "device1"
+            let tabs1 = [Tabsend.GrabbedTab "u1"]
+            Tabsend.withAppDb tempDir $ \_state db -> do
+                Tabsend.addToken db t1 "user1" d1
+                Tabsend.saveGrab db t1 []
+            Tabsend.withAppDb tempDir $ \_state db -> do
+                Tabsend.saveGrab db t1 tabs1
+            Tabsend.withAppDb tempDir $ \state _ -> do
+                user1 <- readIORef . snd $ state.peers ! "user1"
+                grabbedTabs1 <- readIORef . snd $ user1 ! d1
+                grabbedTabs1 `shouldBe` tabs1
+
+        it "saves one grab on exception" $ \tempDir' -> do
+            let tempDir = fromAbsDir tempDir'
+            let t1 = Tabsend.AuthToken "token1"
+            let d1 = Tabsend.PeerName "device1"
+            let tabs1 = [Tabsend.GrabbedTab "u1"]
+            Tabsend.withAppDb tempDir $ \_state db -> do
+                Tabsend.addToken db t1 "user1" d1
+                Tabsend.saveGrab db t1 []
+            r <- try $ Tabsend.withAppDb tempDir $ \_state db -> do
+                Tabsend.saveGrab db t1 tabs1
+                throwIO $ ExitFailure 228
+            r `shouldBe` Left (ExitFailure 228)
+            Tabsend.withAppDb tempDir $ \state _ -> do
+                user1 <- readIORef . snd $ state.peers ! "user1"
+                grabbedTabs1 <- readIORef . snd $ user1 ! d1
+                grabbedTabs1 `shouldBe` tabs1
 
         it "saves inFlight" $ \tempDir' -> do
             let tempDir = fromAbsDir tempDir'

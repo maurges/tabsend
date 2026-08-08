@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 
+set -e
+
 DB_DIR="$(mktemp --directory)"
 
-set -e
-# kill all spawned processes
-trap "trap - SIGTERM && rm -r $DB_DIR && kill -- -$$" SIGINT SIGTERM EXIT
-
 stack run -- --db "$DB_DIR" &
+SERVER_PID=$!
 sleep 0.5s
+# kill all spawned processes
+trap 'kill $SERVER_PID; rm -r $DB_DIR' EXIT
+
 
 BASE=http://localhost:31337
 
@@ -38,13 +40,19 @@ r="$(jcurl "update" '{"tabs": []}' "$TOKEN2")"
 # Send some tabs, see them in peer info
 jcurl "update" '{"tabs": [{"url": "url1", "identity": "id1", "title": "t1", "favicon": "f1", "inFlight": false}]}' "$TOKEN1"
 r="$(curl -s "$BASE/get-peers" --header "X-Tabsend-Auth: $TOKEN1" --fail-with-body | jq -c '.peers | sort')"
-[ "$r" == '[{"name":"peer1","tabs":[{"favicon":"f1","identity":"id1","inFlight":false,"title":"t1","url":"url1"}]},{"name":"peer2","tabs":[]}]' ] \
-    || die "Unexpected tabs from peer1: $r"
+[ "$r" == '[{"name":"peer2","tabs":[]}]' ] \
+    || die "Unexpected tabs from peer2@1: $r"
+r="$(curl -s "$BASE/get-peers" --header "X-Tabsend-Auth: $TOKEN2" --fail-with-body | jq -c '.peers | sort')"
+[ "$r" == '[{"name":"peer1","tabs":[{"favicon":"f1","identity":"id1","inFlight":false,"title":"t1","url":"url1"}]}]' ] \
+    || die "Unexpected tabs from peer1@1: $r"
 
 jcurl "update" '{"tabs": [{"url": "url2", "identity": "id2", "title": "t2", "favicon": "f2", "inFlight": false}]}' "$TOKEN2"
 r="$(curl -s "$BASE/get-peers" --header "X-Tabsend-Auth: $TOKEN1" --fail-with-body | jq -c '.peers | sort')"
-[ "$r" == '[{"name":"peer1","tabs":[{"favicon":"f1","identity":"id1","inFlight":false,"title":"t1","url":"url1"}]},{"name":"peer2","tabs":[{"favicon":"f2","identity":"id2","inFlight":false,"title":"t2","url":"url2"}]}]' ] \
-    || die "Unexpected tabs from peer2: $r"
+[ "$r" == '[{"name":"peer2","tabs":[{"favicon":"f2","identity":"id2","inFlight":false,"title":"t2","url":"url2"}]}]' ] \
+    || die "Unexpected tabs from peer2@2: $r"
+r="$(curl -s "$BASE/get-peers" --header "X-Tabsend-Auth: $TOKEN2" --fail-with-body | jq -c '.peers | sort')"
+[ "$r" == '[{"name":"peer1","tabs":[{"favicon":"f1","identity":"id1","inFlight":false,"title":"t1","url":"url1"}]}]' ] \
+    || die "Unexpected tabs from peer1@2: $r"
 
 # Push a tab
 jcurl "push-tab" '{"target": "peer2", "tab": {"url": "url3", "identity": "id3", "title": "t3", "favicon": "f3", "inFlight": false}}' "$TOKEN1"

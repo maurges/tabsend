@@ -4,6 +4,7 @@
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Tabsend where
 
@@ -229,6 +230,7 @@ withAppDb path run = Lmdb.withEnv path flags initAndRun where
             pushedMap <- Lmdb.withCursor tx pushed $ curIterate HashMap.empty (collectJson @[PushedTab])
             grabbed <- Lmdb.openDbi tx (Just "grabbed") True
             grabbedMap <- Lmdb.withCursor tx grabbed $ curIterate HashMap.empty (collectJson @[GrabbedTab])
+            putStrLn $ "Collected grabbed: " <> show grabbedMap
 
             pure (tokenMap, nameMap, tabMap, pushedMap, grabbedMap)
 
@@ -238,6 +240,9 @@ withAppDb path run = Lmdb.withEnv path flags initAndRun where
         let peers' = collect HashMap.empty users' names tabs' pushed' grabbed' (HashMap.toList users')
         peers <- forM peers' $ \(ps, ifs) -> liftA2 (,) (newIORef ps) (newIORef ifs)
         let users = unionUser users' names
+
+        grabsDbg <- traverse (\(_, ifl) -> traverse (readIORef . snd) ifl) peers'
+        putStrLn $ "Read grabs: " <> show grabsDbg
 
         let state = State {users, peers}
         run state env
@@ -326,7 +331,7 @@ getState s token which =
 
 getToken :: StateVar -> Db -> TokenReq -> Handler AuthToken
 getToken s db req = do
-    liftIO $ putStrLn $ "token | " <> show req
+    --liftIO $ putStrLn $ "token | " <> show req
 
     if req.username /= "admin" || req.password /= "qwe"
     then Servant.throwError Servant.err403
@@ -347,8 +352,7 @@ getToken s db req = do
                 then pure (state, Nothing)
                 else
                     -- Associate this token to the user
-                    let
-                        users = HashMap.insert token (req.username, req.peerName) state.users
+                    let users = HashMap.insert token (req.username, req.peerName) state.users
                     in pure (state {users}, Just u)
             Nothing -> do
                 -- Create completely new state vars for this user
@@ -378,21 +382,40 @@ getToken s db req = do
 
 getPeers :: StateVar -> AuthToken -> Handler PeersResp
 getPeers s token = do
-    liftIO . putStrLn $ "getPeers"
-    peerMap <- readIORef =<< getState s token fst
+    --liftIO . putStrLn $ "getPeers"
+    (peerMapRef, inFlighMapRef) <- getState s token id
     peerName <- liftIO (readMVar s) <&> (.users) <&> HashMap.lookup token >>= \case
         Nothing -> Servant.throwError err500 -- Incoherent state
         Just (_username, peerName) -> pure peerName
+
+    peerMap <- readIORef peerMapRef
+    inFlightMap <- readIORef inFlighMapRef
+
     let otherPeers = filter ((/=) peerName . fst) . HashMap.toList $ peerMap
     peers <- forM otherPeers $ \(name, tabRef) -> do
-        tabs <- readIORef tabRef
+        tabs' <- readIORef tabRef
+        let inFlight = inFlightMap ! name
+        pushed <- readIORef . fst $ inFlight
+        grabbed <- readIORef . snd $ inFlight
+        let tabs = map (grayOut grabbed) tabs' <> map tabOfPush pushed
         pure $ PeerInfo { name, tabs }
 
     pure PeersResp { peers }
+    where
+        tabOfPush t = TabInfo
+            { url = t.url
+            , identity = t.tabId
+            , title = t.url
+            , favicon = Nothing
+            , inFlight = True
+            }
+        grayOut grabbed t
+            | (GrabbedTab t.identity) `elem` grabbed  = t { inFlight = True }
+            | otherwise  = t
 
 pushTab :: StateVar -> Db -> AuthToken -> PushTabReq -> Handler Text
 pushTab s db token req = do
-    liftIO . putStrLn $ "pushTab | " <> show req
+    --liftIO . putStrLn $ "pushTab | " <> show req
     let pushed = PushedTab { url = req.tab.url, tabId = req.tab.identity }
     (pushedRef, _grabbed) <-
         getState s token snd
@@ -408,7 +431,7 @@ pushTab s db token req = do
 
 grabTab :: StateVar -> Db -> AuthToken -> GrabTabReq -> Handler Text
 grabTab s db token req = do
-    liftIO . putStrLn $ "grabTab | " <> show req
+    --liftIO . putStrLn $ "grabTab | " <> show req
     let grabbed = GrabbedTab { tabId = req.tabId }
     (_pushed, grabbedRef) <-
         getState s token snd
@@ -424,7 +447,7 @@ grabTab s db token req = do
 
 notifyTabs :: StateVar -> Db -> AuthToken -> NotifyTabsReq -> Handler NotifyTabsResp
 notifyTabs s db token req = do
-    liftIO . putStrLn $ "notify | " <> show req
+    --liftIO . putStrLn $ "notify | " <> show req
     (peerRef, inFlightRef) <- getState s token id
     peerName <- liftIO (readMVar s) <&> (.users) <&> HashMap.lookup token >>= \case
         Nothing -> Servant.throwError err500 -- Incoherent state
@@ -441,7 +464,7 @@ notifyTabs s db token req = do
 
 acknowledge :: StateVar -> Db -> AuthToken -> AckReq -> Handler Text
 acknowledge s db token req = do
-    liftIO . putStrLn $ "acknowledge | " <> show req
+    --liftIO . putStrLn $ "acknowledge | " <> show req
     peerName <- liftIO (readMVar s) <&> (.users) <&> HashMap.lookup token >>= \case
         Nothing -> Servant.throwError Servant.err403 -- bad token
         Just (_username, peerName) -> pure peerName
@@ -475,7 +498,7 @@ main = do
     createDirectoryIfMissing True dbDir
     let settings = Warp.defaultSettings
             & Warp.setPort 31337
-            & Warp.setHost "127.0.0.1"
+            & Warp.setHost "*"
     putStrLn "Server starting.."
     withAppDb dbDir $ \state db -> do
         stateVar <- newMVar state
