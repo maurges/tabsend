@@ -54,11 +54,7 @@ atomicModifyIORef_ ref f = liftIO $ Data.IORef.atomicModifyIORef' ref (\x -> (f 
 atomicModifyIORef :: MonadIO m => IORef a -> (a -> a) -> m a
 atomicModifyIORef ref f = liftIO $ Data.IORef.atomicModifyIORef' ref (\x -> (f x, f x))
 
--- | Lookup in case we know token must exist. Throws the provided http error if not found
-lookupName :: Servant.ServerError -> PeerName -> HashMap PeerName v -> Handler v
-lookupName e k m = case HashMap.lookup k m of
-    Nothing -> Servant.throwError e
-    Just x -> pure x
+data Pair a b = !a :*: !b
 
 
 ----- Api Definition -----
@@ -181,8 +177,10 @@ type Peers = HashMap PeerName (IORef [TabInfo])
 -- | Tabs pushed and grabbed to this peer and not yet acked by them
 type InFlight = HashMap PeerName (IORef [PushedTab], IORef [GrabbedTab])
 
+-- Apparently there is no better solution for a bidirectional map than keeping two maps
 data State = State
     { users :: !(HashMap AuthToken (Username, PeerName))
+    , tokens :: !(HashMap (Username, PeerName) AuthToken)
     , peers :: !(HashMap Username (IORef Peers, IORef InFlight))
     }
 type StateVar = MVar State
@@ -239,12 +237,12 @@ withAppDb path run = Lmdb.withEnv path flags initAndRun where
         grabbed' <- traverse newIORef grabbed
         let peers' = collect HashMap.empty users' names tabs' pushed' grabbed' (HashMap.toList users')
         peers <- forM peers' $ \(ps, ifs) -> liftA2 (,) (newIORef ps) (newIORef ifs)
-        let users = unionUser users' names
+        let (users :*: tokens) = unionUser users' names
 
         grabsDbg <- traverse (\(_, ifl) -> traverse (readIORef . snd) ifl) peers'
         putStrLn $ "Read grabs: " <> show grabsDbg
 
-        let state = State {users, peers}
+        let state = State {users, tokens, peers}
         run state env
 
     collectText :: (Text -> a) -> HashMap AuthToken a -> (ByteString, ByteString) -> HashMap AuthToken a
@@ -276,9 +274,16 @@ withAppDb path run = Lmdb.withEnv path flags initAndRun where
                 !userInFlights' = HashMap.insert name inFlight userInFlights
                 !acc' = HashMap.insert username (userPeers', userInFlights') acc
             in collect acc' users names tabs pushed grabbed rest
-    -- Union the tokens and names table into the 'users' state
-    unionUser users names = flip HashMap.mapWithKey users $ \token username ->
-        (username, names ! token)
+
+    -- Union the tokens and names table into the 'users' and 'tokens' state
+    unionUser users names =
+        let step (users :*: tokens) token username =
+                let !peerName = names ! token
+                    !p = (username, peerName)
+                    !users' = HashMap.insert token p users
+                    !tokens' = HashMap.insert p token tokens
+                in users' :*: tokens'
+        in HashMap.foldlWithKey' step (HashMap.empty :*: HashMap.empty) users
 
 addToken :: Db -> AuthToken -> Username -> PeerName -> IO ()
 addToken env (AuthToken token') username peerName = Lmdb.withWriteTxn env $ \tx -> do
@@ -329,6 +334,23 @@ getState s token which =
                 Nothing -> Servant.throwError err500 -- user data missing
                 Just tuple -> pure $ which tuple
 
+-- | Lookup in case we know token must exist. Throws the provided http error if not found
+lookupName :: Servant.ServerError -> PeerName -> HashMap PeerName v -> Handler v
+lookupName e k m = case HashMap.lookup k m of
+    Nothing -> Servant.throwError e
+    Just x -> pure x
+
+-- | Lookup in case we know the token and the name exist
+lookupPeer :: StateVar -> AuthToken -> PeerName -> Handler AuthToken
+lookupPeer s token name = do
+    state <- liftIO $ readMVar s
+    (username, _selfName) <- case HashMap.lookup token state.users of
+        Just x -> pure x
+        Nothing -> Servant.throwError err500 -- precondition of token existing doesn't hold
+    case HashMap.lookup (username, name) state.tokens of
+        Just x -> pure x
+        Nothing -> Servant.throwError err500 -- precondition of name existing doesn't hold
+
 getToken :: StateVar -> Db -> TokenReq -> Handler AuthToken
 getToken s db req = do
     --liftIO $ putStrLn $ "token | " <> show req
@@ -352,8 +374,10 @@ getToken s db req = do
                 then pure (state, Nothing)
                 else
                     -- Associate this token to the user
-                    let users = HashMap.insert token (req.username, req.peerName) state.users
-                    in pure (state {users}, Just u)
+                    let pair = (req.username, req.peerName)
+                        users = HashMap.insert token pair state.users
+                        tokens = HashMap.insert pair token state.tokens
+                    in pure (state {users, tokens}, Just u)
             Nothing -> do
                 -- Create completely new state vars for this user
                 tabs <- newIORef HashMap.empty
@@ -361,7 +385,9 @@ getToken s db req = do
                 let u = (tabs, inFlight)
                 let peers = HashMap.insert req.username u state.peers
                 -- Also associate this token to the user
-                let users = HashMap.insert token (req.username, req.peerName) state.users
+                let pair = (req.username, req.peerName)
+                let users = HashMap.insert token pair state.users
+                let tokens = HashMap.insert pair token state.tokens
                 pure $ (state {users, peers}, Just u)
 
     (peers, inFlights) <- case mbThisState of
@@ -423,9 +449,10 @@ pushTab s db token req = do
         >>= lookupName
             Servant.err410 -- bad target
             req.target
-    tabs <- atomicModifyIORef pushedRef $ \ts -> pushed : ts
+    peerToken <- lookupPeer s token req.target
 
-    liftIO $ savePush db token tabs
+    tabs <- atomicModifyIORef pushedRef $ \ts -> pushed : ts
+    liftIO $ savePush db peerToken tabs
 
     pure "ok"
 
@@ -439,9 +466,10 @@ grabTab s db token req = do
         >>= lookupName
             Servant.err410 -- bad target
             req.target
-    tabs <- atomicModifyIORef grabbedRef $ \ts -> grabbed : ts
+    peerToken <- lookupPeer s token req.target
 
-    liftIO $ saveGrab db token tabs
+    tabs <- atomicModifyIORef grabbedRef $ \ts -> grabbed : ts
+    liftIO $ saveGrab db peerToken tabs
 
     pure "ok"
 

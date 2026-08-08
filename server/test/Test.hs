@@ -24,6 +24,7 @@ main = sydTest $ do
                 Tabsend.addToken db t3 "user2" d3
             Tabsend.withAppDb tempDir $ \state _db -> do
                 state.users `shouldBe` [(t1, ("user1", d1)), (t2, ("user1", d2)), (t3, ("user2", d3))]
+                state.tokens `shouldBe` [(("user1", d1), t1), (("user1", d2), t2), (("user2", d3), t3)]
 
         it "saves tabs" $ \tempDir' -> do
             let tempDir = fromAbsDir tempDir'
