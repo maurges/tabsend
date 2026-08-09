@@ -14,7 +14,9 @@ build-type:     Simple
 
 library
   exposed-modules:
+      Db
       Tabsend
+      Types
   other-modules:
       Paths_tabsend_server
   autogen-modules:
