@@ -169,7 +169,7 @@ browser.storage.onChanged.addListener(async (changes, areaName) => {
         baseUrl = changes["remote-url"].newValue;
     }
     if (changes["access-token"]) {
-        baseUrl = changes["access-token"].newValue;
+        accessToken = changes["access-token"].newValue;
     }
 });
 

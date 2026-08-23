@@ -366,6 +366,13 @@ async function transferTab(sourceDeviceName, targetDeviceName, tabData) {
             active: false,
             url: tabData.url,
         });
+        // Draw a grayed-out tab on remote device
+        const sourceDevice = remoteDeviceModel.devices.find(d => d.name === sourceDeviceName);
+        const tab = sourceDevice?.tabs?.find(t => t.identity === tabData.identity);
+        if (tab) {
+            tab.inFlight = true;
+        }
+
         await grabTabR(
             {target: sourceDeviceName, tabId: tabData.identity},
         );
