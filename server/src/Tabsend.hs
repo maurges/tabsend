@@ -61,6 +61,21 @@ atomicModifyIORef ref f = liftIO $ Data.IORef.atomicModifyIORef' ref (\x -> (f x
 ----- Api Definition -----
 
 
+data TokenStatus = TokenMissing | TokenValid | TokenInvalid
+    deriving (Eq, Show, Generic)
+    deriving anyclass (FromJSON, ToJSON)
+
+data LoginType = PwdNoReg
+    deriving (Eq, Show, Generic)
+    deriving anyclass (FromJSON, ToJSON)
+
+data InfoResp = InfoResp
+    { tokenStatus :: !TokenStatus
+    , loginType :: !LoginType
+    }
+    deriving (Eq, Show, Generic)
+    deriving anyclass (FromJSON, ToJSON)
+
 data TokenReq = TokenReq
     { username :: !Text
     , password :: !Text
@@ -107,6 +122,8 @@ data NotifyTabsResp = NotifyTabsResp
 data AckReq = AckReq
     { pushedTabs :: ![Text]
     , grabbedTabs :: ![Text]
+    , tabs :: ![TabInfo]
+        -- ^ Tabs after the acknowledged changes are applied
     }
     deriving (Eq, Show, Generic)
     deriving anyclass (FromJSON, ToJSON)
@@ -114,6 +131,11 @@ data AckReq = AckReq
 -- | A required authentication header
 -- TODO: return 403 instead of 400
 type Authd = SApi.Header' '[SApi.Required, SApi.Strict] "X-Tabsend-Auth" AuthToken
+-- | Get information about this server useful before login
+type InfoApi
+    = "info"
+    :> SApi.Header' '[SApi.Optional, SApi.Strict] "X-Tabsend-Auth"  AuthToken
+    :> SApi.Get '[SApi.JSON] InfoResp
 -- | Authorize this client
 type TokenApi = "token" :> SApi.ReqBody '[SApi.JSON] TokenReq :> SApi.Post '[SApi.PlainText] AuthToken
 -- | Get info about all peers
@@ -127,7 +149,7 @@ type NotifyTabsApi = "update" :> Authd :> SApi.ReqBody '[SApi.JSON] NotifyTabsRe
 -- | Acknowledge the receipt of pushed tabs
 type AcknowledgeApi = "acknowledge" :> Authd :> SApi.ReqBody '[SApi.JSON] AckReq :> SApi.Post '[SApi.PlainText] Text
 
-type Api = TokenApi :<|> GetPeersApi :<|> PushTabApi :<|> GrabTabApi :<|> NotifyTabsApi :<|> AcknowledgeApi
+type Api = InfoApi :<|> TokenApi :<|> GetPeersApi :<|> PushTabApi :<|> GrabTabApi :<|> NotifyTabsApi :<|> AcknowledgeApi
 api :: Proxy Api
 api = Proxy
 
@@ -161,6 +183,18 @@ lookupPeer s token name = do
     case HashMap.lookup (username, name) state.tokens of
         Just x -> pure x
         Nothing -> Servant.throwError err500 -- precondition of name existing doesn't hold
+
+getInfo :: StateVar -> Maybe AuthToken -> Handler InfoResp
+getInfo s mbToken = do
+    tokenStatus <- case mbToken of
+        Nothing -> pure TokenMissing
+        Just token -> liftIO (readMVar s) <&> (.users) <&> HashMap.lookup token <&> \case
+            Nothing -> TokenInvalid
+            Just _ -> TokenValid
+    pure InfoResp
+        { tokenStatus
+        , loginType = PwdNoReg
+        }
 
 getToken :: StateVar -> Db -> TokenReq -> Handler AuthToken
 getToken s db req = do
@@ -307,11 +341,13 @@ acknowledge s db token req = do
     peerName <- liftIO (readMVar s) <&> (.users) <&> HashMap.lookup token >>= \case
         Nothing -> Servant.throwError Servant.err403 -- bad token
         Just (_username, peerName) -> pure peerName
-    (pushedRef, grabbedRef) <-
-        getState s token snd
-        >>= readIORef
-        >>= lookupName err500 peerName
-    -- Remove ids in req
+    (peerRef, inFlightRef) <- getState s token id
+    (pushedRef, grabbedRef) <- lookupName err500 peerName =<< readIORef inFlightRef
+    -- Set tabs from request
+    readIORef peerRef >>= lookupName err500 peerName >>= \tabsRef ->
+        atomicModifyIORef_ tabsRef $ const req.tabs
+    liftIO $ Db.saveTabs db token req.tabs
+    -- Remove ids in request
     pushed <- atomicModifyIORef pushedRef $
         filter $ \pushed -> not $ pushed.tabId `elem` req.pushedTabs
     grabbed <- atomicModifyIORef grabbedRef $
@@ -323,7 +359,14 @@ acknowledge s db token req = do
     pure "ok"
 
 apiServer :: StateVar -> Db -> SServer.Server Api
-apiServer s db = getToken s db :<|> getPeers s :<|> pushTab s db :<|> grabTab s db :<|> notifyTabs s db :<|> acknowledge s db
+apiServer s db
+    = getInfo s
+    :<|> getToken s db
+    :<|> getPeers s
+    :<|> pushTab s db
+    :<|> grabTab s db
+    :<|> notifyTabs s db
+    :<|> acknowledge s db
 
 app :: StateVar -> Db -> Wai.Application
 app s db = SServer.serve api $ apiServer s db

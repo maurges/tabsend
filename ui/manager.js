@@ -58,17 +58,6 @@ async function sleep(/** @type {number} */time) {
  */
 
 /** @typedef {{
- *      url: string,
- *      tabId: string,
- *  }} PushedTab
- */
-
-/** @typedef {{
- *      tabId: string,
- *  }} GrabbedTab
- */
-
-/** @typedef {{
  *      name: string,
  *      tabs: TabInfo[],
  *  }} PeerInfo
@@ -89,23 +78,6 @@ async function sleep(/** @type {number} */time) {
  *      target: string,
  *      tabId: string,
  *  }} GrabTabReq
- */
-
-/** @typedef {{
- *      tabs: TabInfo[],
- *  }} NotifyTabsReq
- */
-
-/** @typedef {{
- *      pushedTabs: PushedTab[],
- *      grabbedTabs: GrabbedTab[],
- *  }} NotifyTabsResp
- */
-
-/** @typedef {{
- *      pushedTabs: string[],
- *      grabbedTabs: string[],
- *  }} AckReq
  */
 
 
@@ -181,27 +153,6 @@ async function getPeersR() {
 }
 
 /**
- * @param {NotifyTabsReq} req
- * @returns {Promise<NotifyTabsResp>}
- */
-async function notifyR(req) {
-    const url = expect(baseUrl, "base url not yet set") + "update";
-    const r = await fetch(url, {
-        method: "POST",
-        body: JSON.stringify(req),
-        headers: {
-            "Content-Type": "application/json",
-            "X-Tabsend-Auth": expect(accessToken, "token not yet set"),
-        },
-    });
-    if (!r.ok) {
-        throw new Error("/update failed: " + await r.text());
-    }
-    // TODO parse json
-    return await r.json();
-}
-
-/**
  * @param {PushTabReq} req
  * @returns {Promise<string>}
  */
@@ -237,26 +188,6 @@ async function grabTabR(req) {
     });
     if (!r.ok) {
         throw new Error("/grab-tab failed: " + await r.text());
-    }
-    return await r.text();
-}
-
-/**
- * @param {AckReq} req
- * @returns {Promise<string>}
- */
-async function acknowledgeR(req) {
-    const url = expect(baseUrl, "base url not yet set") + "acknowledge";
-    const r = await fetch(url, {
-        method: "POST",
-        body: JSON.stringify(req),
-        headers: {
-            "Content-Type": "application/json",
-            "X-Tabsend-Auth": expect(accessToken, "token not yet set"),
-        },
-    });
-    if (!r.ok) {
-        throw new Error("/acknowledge failed: " + await r.text());
     }
     return await r.text();
 }
@@ -517,51 +448,6 @@ async function populateRemoteTabs() {
     remoteDeviceModel.devices = resp.peers;
 }
 
-/** @type { Record<string, number> } */
-let recentlyAcked = {};
-async function notifyLocalTabs() {
-    const updates = await notifyR(localTabModel);
-
-    // Acked tabs are remembered for a minute for idempotency
-    const now = Date.now();
-    // Filter a dict, yeah it looks like this
-    recentlyAcked = Object.fromEntries(
-        Object.entries(recentlyAcked)
-            .filter(([_id, time]) => now - time < 60_000)
-    );
-
-    let pushedTabs = [];
-    let grabbedTabs = [];
-    for (const tab of updates.pushedTabs) {
-        if (!(tab.tabId in recentlyAcked)) {
-            await browser.tabs.create({
-                active: false,
-                url: tab.url,
-            });
-        }
-        pushedTabs.push(tab.tabId);
-        recentlyAcked[tab.tabId] = now;
-    }
-    for (const tab of updates.grabbedTabs) {
-        // TODO buffer of acked
-        const tabId = parseInt(tab.tabId);
-        if (!(tab.tabId in recentlyAcked)) {
-            if (!isNaN(tabId)) {
-                try {
-                    await browser.tabs.remove(tabId);
-                } catch (e) {
-                    console.log("Error removing tab", e);
-                }
-            }
-        }
-        grabbedTabs.push(tab.tabId);
-        recentlyAcked[tab.tabId] = now;
-    }
-    if (pushedTabs.length !== 0 || grabbedTabs.length !== 0) {
-        await acknowledgeR({pushedTabs, grabbedTabs});
-    }
-}
-
 document.addEventListener("alpine:init", () => {
     // Define Alpine types that we use for typescript checking
     /** @type {{ reactive: <T>(v: T) => T, data: <T>(name: string, fn: () => T) => void }} */
@@ -625,6 +511,3 @@ browser.tabs.onRemoved.addListener(async () => {
 
 populateRemoteTabs();
 setInterval(populateRemoteTabs, 5000);
-// TODO these should be in the background script
-notifyLocalTabs();
-setInterval(notifyLocalTabs, 5000);

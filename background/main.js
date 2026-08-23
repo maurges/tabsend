@@ -44,7 +44,19 @@ function expect(x, s) {
  *      identity: string,
  *      title: string,
  *      favicon: string | null,
+ *      inFlight: boolean,
  *  }} TabInfo
+ */
+
+/** @typedef {{
+ *      url: string,
+ *      tabId: string,
+ *  }} PushedTab
+ */
+
+/** @typedef {{
+ *      tabId: string,
+ *  }} GrabbedTab
  */
 
 /** @typedef {{
@@ -54,17 +66,21 @@ function expect(x, s) {
  */
 
 /** @typedef {{
- *      url: string,
- *  }} PushedTab
+ *      tabs: TabInfo[],
+ *  }} NotifyTabsReq
  */
 
 /** @typedef {{
- *      tabs: TabInfo[],
- *  }} NotifyTabReq
+ *      pushedTabs: PushedTab[],
+ *      grabbedTabs: GrabbedTab[],
+ *  }} NotifyTabsResp
  */
+
 /** @typedef {{
- *      tabs: PushedTab[],
- *  }} NotifyTabResp
+ *      pushedTabs: string[],
+ *      grabbedTabs: string[],
+ *      tabs: TabInfo[],
+ *  }} AckReq
  */
 
 
@@ -91,20 +107,44 @@ async function getToken(username, password) {
 }
 
 /**
- * @param {NotifyTabReq} req
- * @returns {Promise<NotifyTabResp>}
+ * @param {NotifyTabsReq} req
+ * @returns {Promise<NotifyTabsResp>}
  */
-async function updateTabs(req) {
-    const url = baseUrl + "/update";
+async function notifyR(req) {
+    const url = expect(baseUrl, "base url not yet set") + "update";
     const r = await fetch(url, {
         method: "POST",
         body: JSON.stringify(req),
         headers: {
             "Content-Type": "application/json",
-            "X-Tabsend-Auth": expect(accessToken, "access token not yet set"),
+            "X-Tabsend-Auth": expect(accessToken, "token not yet set"),
         },
     });
-    return r.json(); // TODO proper parsing
+    if (!r.ok) {
+        throw new Error("/update failed: " + await r.text());
+    }
+    // TODO parse json
+    return await r.json();
+}
+
+/**
+ * @param {AckReq} req
+ * @returns {Promise<string>}
+ */
+async function acknowledgeR(req) {
+    const url = expect(baseUrl, "base url not yet set") + "acknowledge";
+    const r = await fetch(url, {
+        method: "POST",
+        body: JSON.stringify(req),
+        headers: {
+            "Content-Type": "application/json",
+            "X-Tabsend-Auth": expect(accessToken, "token not yet set"),
+        },
+    });
+    if (!r.ok) {
+        throw new Error("/acknowledge failed: " + await r.text());
+    }
+    return await r.text();
 }
 
 
@@ -152,10 +192,61 @@ async function buildState() {
             url: expect(tab.url, "not enough tab permissions to get tab url"),
             identity: expect(tab.id, "not enough tab permissions to get tab id").toString(),
             title: expect(tab.title, "not enough tab permissions to get tab title"),
-            favicon: expect(tab.favIconUrl, "not enough tab permissions to get tab favicon"),
+            favicon: tab.favIconUrl || null,
+            inFlight: false,
         })
     }
     return tabs;
+}
+
+/** @type { Record<string, number> } */
+let recentlyAcked = {};
+async function notifyLocalTabs() {
+    const currentTabs = await buildState();
+    const updates = await notifyR({ tabs: currentTabs });
+
+    // Acked tabs are remembered for a minute for idempotency
+    const now = Date.now();
+    // Filter a dict, yeah it looks like this
+    recentlyAcked = Object.fromEntries(
+        Object.entries(recentlyAcked)
+            .filter(([_id, time]) => now - time < 60_000)
+    );
+
+    // Create pushed tabs
+    let pushedTabs = [];
+    let grabbedTabs = [];
+    for (const tab of updates.pushedTabs) {
+        if (!(tab.tabId in recentlyAcked)) {
+            await browser.tabs.create({
+                active: false,
+                url: tab.url,
+            });
+        }
+        pushedTabs.push(tab.tabId);
+        recentlyAcked[tab.tabId] = now;
+    }
+    // Remove grabbed tabs
+    for (const tab of updates.grabbedTabs) {
+        // TODO buffer of acked TODO what did I mean by that?
+        const tabId = parseInt(tab.tabId);
+        if (!(tab.tabId in recentlyAcked)) {
+            if (!isNaN(tabId)) {
+                try {
+                    await browser.tabs.remove(tabId);
+                } catch (e) {
+                    console.log("Error removing tab", e);
+                }
+            }
+        }
+        grabbedTabs.push(tab.tabId);
+        recentlyAcked[tab.tabId] = now;
+    }
+    // Acknowledge the in flights with new tab state
+    const tabs = await buildState();
+    if (pushedTabs.length !== 0 || grabbedTabs.length !== 0) {
+        await acknowledgeR({pushedTabs, grabbedTabs, tabs});
+    }
 }
 
 // periodically notify the server about our tab state
@@ -163,17 +254,10 @@ browser.alarms.onAlarm.addListener(async (a) => {
     if (accessToken === null)  return;
     if (a.name !== "tab-notify")  return;
 
-    const tabs = await buildState();
-
-    const req = { tabs };
-    const resp = await updateTabs(req);
-
-    // create new received tabs
-    for (const tab of resp.tabs) {
-        await browser.tabs.create({
-            active: false,
-            url: tab.url,
-        });
-    }
+    await notifyLocalTabs();
 });
 browser.alarms.create("tab-notify", {periodInMinutes: 0.25});
+
+// TODO these should be in the background script
+notifyLocalTabs();
+setInterval(notifyLocalTabs, 5000);

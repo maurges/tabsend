@@ -61,7 +61,7 @@ r="$(jcurl "update" '{"tabs": []}' "$TOKEN2")"
 [ "$r" == '{"grabbedTabs":[],"pushedTabs":[{"tabId":"id3","url":"url3"}]}' ] || die "Bad update after push: $r"
 
 # Acknowledge the push
-jcurl "acknowledge" '{"pushedTabs": ["id3"], "grabbedTabs": []}' "$TOKEN2"
+jcurl "acknowledge" '{"pushedTabs": ["id3"], "grabbedTabs": [], "tabs": [{"url": "url3", "identity": "id3", "title": "t3", "favicon": "f3", "inFlight": false}]}' "$TOKEN2"
 # Observe its absence in notification
 r="$(jcurl "update" '{"tabs": []}' "$TOKEN2")"
 [ "$r" == '{"grabbedTabs":[],"pushedTabs":[]}' ] || die "Bad update after ack: $r"
